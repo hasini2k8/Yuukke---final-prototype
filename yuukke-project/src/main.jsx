@@ -4,6 +4,13 @@ import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import App from "./App.jsx";
 import MarketplacePage from "./pages/Marketplace.jsx";
 import ProductDetailPage from "./pages/ProductDetail.jsx";
+import CartPage from "./pages/Cart.jsx";
+import CheckoutPage from "./pages/Checkout.jsx";
+import OrdersPage from "./pages/Orders.jsx";
+import WishlistPage from "./pages/Wishlist.jsx";
+import { AuthProvider } from "./components/AuthContext.jsx";
+import { CartProvider } from "./components/CartContext.jsx";
+import { WishlistProvider } from "./components/WishlistContext.jsx";
 
 function MarketplaceRoute() {
   const navigate = useNavigate();
@@ -12,12 +19,22 @@ function MarketplaceRoute() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/marketplace" element={<MarketplaceRoute />} />
-        <Route path="/product/:id" element={<ProductDetailPage />} />
-        <Route path="*" element={<App />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <CartProvider>
+        <WishlistProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/marketplace" element={<MarketplaceRoute />} />
+              <Route path="/product/:id" element={<ProductDetailPage />} />
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/wishlist" element={<WishlistPage />} />
+              <Route path="*" element={<App />} />
+            </Routes>
+          </BrowserRouter>
+        </WishlistProvider>
+      </CartProvider>
+    </AuthProvider>
   </React.StrictMode>
 );

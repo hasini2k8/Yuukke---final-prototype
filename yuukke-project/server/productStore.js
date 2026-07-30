@@ -3,14 +3,8 @@
 // without needing a hosted database. Production on Vercel needs a real
 // database (serverless functions don't have durable local disk) — this only
 // runs under `npm run dev`.
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_FILE = path.join(__dirname, "data", "products.json");
+import { createStore } from "./jsonStore.js";
 
 const SEED_PRODUCTS = [
   {
@@ -39,34 +33,19 @@ const SEED_PRODUCTS = [
   },
 ];
 
-async function ensureStore() {
-  if (!existsSync(DATA_FILE)) {
-    await mkdir(path.dirname(DATA_FILE), { recursive: true });
-    await writeFile(DATA_FILE, JSON.stringify(SEED_PRODUCTS, null, 2));
-  }
-}
-
-async function readAll() {
-  await ensureStore();
-  const raw = await readFile(DATA_FILE, "utf8");
-  return JSON.parse(raw);
-}
-
-async function writeAll(products) {
-  await writeFile(DATA_FILE, JSON.stringify(products, null, 2));
-}
+const store = createStore("products.json", SEED_PRODUCTS);
 
 export async function listProducts() {
-  return readAll();
+  return store.readAll();
 }
 
 export async function getProduct(id) {
-  const products = await readAll();
+  const products = await store.readAll();
   return products.find((p) => p.id === id) || null;
 }
 
 export async function createProduct(data) {
-  const products = await readAll();
+  const products = await store.readAll();
   const product = {
     id: crypto.randomUUID(),
     name: String(data.name || "").trim(),
@@ -77,9 +56,10 @@ export async function createProduct(data) {
     modelUrl: data.modelUrl || null,
     previewColor: data.previewColor || null,
     imagePreview: data.imagePreview || null,
+    inStock: data.inStock !== false,
     createdAt: new Date().toISOString(),
   };
   products.push(product);
-  await writeAll(products);
+  await store.writeAll(products);
   return product;
 }

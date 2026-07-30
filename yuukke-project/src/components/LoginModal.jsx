@@ -1,11 +1,39 @@
 import React, { useState } from "react";
-import { X, Mail, Lock } from "lucide-react";
+import { X, Mail, Lock, User as UserIcon } from "lucide-react";
 import { theme } from "../theme";
-import { Logo } from "./Shared";
+import { Logo, Spinner } from "./Shared";
+import { useAuth } from "./AuthContext";
+
+function fieldWrap() {
+  return { display: "flex", alignItems: "center", gap: 8, border: `1.5px solid ${theme.line}`, borderRadius: 11, padding: "11px 14px", background: theme.cream };
+}
+function fieldInput() {
+  return { border: "none", outline: "none", background: "none", flex: 1, fontSize: 13.5, fontFamily: theme.fontBody };
+}
 
 export default function LoginModal({ onClose }) {
+  const { login, signup } = useAuth();
+  const [mode, setMode] = useState("login"); // login | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      if (mode === "login") await login({ email, password });
+      else await signup({ email, password, businessName });
+      onClose();
+    } catch (err) {
+      setError(err.message || "Something went wrong — please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div onClick={onClose} style={{
@@ -18,30 +46,56 @@ export default function LoginModal({ onClose }) {
         </button>
 
         <div style={{ marginBottom: 22 }}><Logo size={26} /></div>
-        <h2 style={{ fontFamily: theme.fontDisplay, fontSize: 22, color: theme.ink, margin: "0 0 6px" }}>Welcome back</h2>
-        <p style={{ fontSize: 13.5, color: theme.inkSoft, marginBottom: 22, fontFamily: theme.fontBody }}>Log in to manage your Yuukke store.</p>
+        <h2 style={{ fontFamily: theme.fontDisplay, fontSize: 22, color: theme.ink, margin: "0 0 6px" }}>
+          {mode === "login" ? "Welcome back" : "Create your account"}
+        </h2>
+        <p style={{ fontSize: 13.5, color: theme.inkSoft, marginBottom: 22, fontFamily: theme.fontBody }}>
+          {mode === "login" ? "Log in to shop, save favorites, and track orders." : "Join Yuukke to shop, save favorites, and track orders."}
+        </p>
 
-        <label style={{ display: "block", marginBottom: 14 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Email or mobile number</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1.5px solid ${theme.line}`, borderRadius: 11, padding: "11px 14px", background: theme.cream }}>
-            <Mail size={15} color={theme.inkSoft} />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@business.com" style={{ border: "none", outline: "none", background: "none", flex: 1, fontSize: 13.5, fontFamily: theme.fontBody }} />
-          </div>
-        </label>
+        <form onSubmit={handleSubmit}>
+          {mode === "signup" && (
+            <label style={{ display: "block", marginBottom: 14 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Business or full name</span>
+              <div style={fieldWrap()}>
+                <UserIcon size={15} color={theme.inkSoft} />
+                <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Anjali Handlooms" style={fieldInput()} />
+              </div>
+            </label>
+          )}
 
-        <label style={{ display: "block", marginBottom: 22 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Password</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1.5px solid ${theme.line}`, borderRadius: 11, padding: "11px 14px", background: theme.cream }}>
-            <Lock size={15} color={theme.inkSoft} />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={{ border: "none", outline: "none", background: "none", flex: 1, fontSize: 13.5, fontFamily: theme.fontBody }} />
-          </div>
-        </label>
+          <label style={{ display: "block", marginBottom: 14 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Email</span>
+            <div style={fieldWrap()}>
+              <Mail size={15} color={theme.inkSoft} />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@business.com" style={fieldInput()} />
+            </div>
+          </label>
 
-        <button style={{ width: "100%", background: theme.wine, color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 14 }}>
-          Log in
-        </button>
+          <label style={{ display: "block", marginBottom: 20 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Password</span>
+            <div style={fieldWrap()}>
+              <Lock size={15} color={theme.inkSoft} />
+              <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={fieldInput()} />
+            </div>
+          </label>
+
+          {error && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 14 }}>{error}</p>}
+
+          <button type="submit" disabled={loading} style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", background: theme.wine, color: "#fff",
+            border: "none", borderRadius: 12, padding: "13px 0", fontWeight: 700, fontSize: 14, cursor: loading ? "default" : "pointer",
+            opacity: loading ? 0.7 : 1, marginBottom: 14,
+          }}>
+            {loading && <Spinner />} {mode === "login" ? "Log in" : "Create account"}
+          </button>
+        </form>
+
         <p style={{ fontSize: 12.5, color: theme.inkSoft, textAlign: "center" }}>
-          New to Yuukke? <span style={{ color: theme.wine, fontWeight: 700, cursor: "pointer" }}>Register your business</span>
+          {mode === "login" ? "New to Yuukke? " : "Already have an account? "}
+          <span onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }} style={{ color: theme.wine, fontWeight: 700, cursor: "pointer" }}>
+            {mode === "login" ? "Create an account" : "Log in"}
+          </span>
         </p>
       </div>
     </div>

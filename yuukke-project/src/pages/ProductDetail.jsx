@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
-  ChevronRight, ShoppingCart, CreditCard, Heart, Info, Ruler, Box, ImageIcon,
+  ChevronRight, ShoppingCart, CreditCard, Heart, Info, Ruler, Box, ImageIcon, Check,
 } from "lucide-react";
 import { theme } from "../theme";
 import { Logo, Spinner } from "../components/Shared";
 import SplatViewer from "../components/SplatViewer";
 import PlaceholderViewer from "../components/PlaceholderModel";
+import LoginModal from "../components/LoginModal";
 import { fetchProduct } from "../lib/products";
+import { useAuth } from "../components/AuthContext";
+import { useCart } from "../components/CartContext";
+import { useWishlist } from "../components/WishlistContext";
 
 function Crumb({ children, last }) {
   return (
@@ -19,10 +23,50 @@ function Crumb({ children, last }) {
 
 export default function ProductDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { add: addToCart } = useCart();
+  const { toggle: toggleWishlist, has: inWishlist } = useWishlist();
   const [product, setProduct] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [view, setView] = useState("3d"); // 3d | photo
   const [qty, setQty] = useState(1);
+  const [showLogin, setShowLogin] = useState(false);
+  const [added, setAdded] = useState(false);
+  const [cartError, setCartError] = useState("");
+
+  function requireLogin() {
+    setShowLogin(true);
+    return false;
+  }
+
+  async function handleAddToCart() {
+    if (!user) return requireLogin();
+    setCartError("");
+    try {
+      await addToCart(product.id, qty);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1800);
+    } catch (e) {
+      setCartError(e.message || "Couldn't add to cart just now.");
+    }
+  }
+
+  async function handleBuyNow() {
+    if (!user) return requireLogin();
+    setCartError("");
+    try {
+      await addToCart(product.id, qty);
+      navigate("/checkout");
+    } catch (e) {
+      setCartError(e.message || "Couldn't add to cart just now.");
+    }
+  }
+
+  async function handleWishlist() {
+    if (!user) return requireLogin();
+    await toggleWishlist(product.id);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +86,17 @@ export default function ProductDetailPage() {
     <div style={{ background: theme.cream, minHeight: "100vh", fontFamily: theme.fontBody }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 40px", borderBottom: `1px solid ${theme.line}`, background: theme.white }}>
         <a href="/"><Logo size={26} /></a>
-        <a href="/marketplace" style={{ fontSize: 13.5, fontWeight: 600, color: theme.wine, textDecoration: "none" }}>Back to marketplace</a>
+        <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+          <a href="/marketplace" style={{ fontSize: 13.5, fontWeight: 600, color: theme.wine, textDecoration: "none" }}>Back to marketplace</a>
+          {user ? (
+            <>
+              <a href="/orders" style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, textDecoration: "none" }}>My Orders</a>
+              <a href="/cart" style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, textDecoration: "none" }}>Cart</a>
+            </>
+          ) : (
+            <span onClick={() => setShowLogin(true)} style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, cursor: "pointer" }}>Log in</span>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: "16px 40px 0", display: "flex", alignItems: "center", gap: 6 }}>
@@ -113,9 +167,19 @@ export default function ProductDetailPage() {
               </select>
             </div>
 
-            <button style={cartBtn(false)}><ShoppingCart size={16} /> Add to Cart</button>
-            <button style={cartBtn(true)}><CreditCard size={16} /> Buy Now</button>
-            <button style={{ ...cartBtn(false), border: `1.5px solid ${theme.line}`, background: "none" }}><Heart size={16} /> Add to Wishlist</button>
+            {cartError && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 10 }}>{cartError}</p>}
+            <button onClick={handleAddToCart} style={cartBtn(false)}>
+              {added ? <Check size={16} /> : <ShoppingCart size={16} />} {added ? "Added to cart!" : "Add to Cart"}
+            </button>
+            <button onClick={handleBuyNow} style={cartBtn(true)}><CreditCard size={16} /> Buy Now</button>
+            <button onClick={handleWishlist} style={{
+              ...cartBtn(false),
+              border: `1.5px solid ${inWishlist(product.id) ? theme.wine : theme.line}`,
+              background: inWishlist(product.id) ? theme.wineTint : "none",
+              color: inWishlist(product.id) ? theme.wine : theme.ink,
+            }}>
+              <Heart size={16} fill={inWishlist(product.id) ? theme.wine : "none"} /> {inWishlist(product.id) ? "In Your Wishlist" : "Add to Wishlist"}
+            </button>
 
             <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 16, padding: 22, marginTop: 26 }}>
               <p style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: theme.ink, margin: "0 0 14px" }}>
@@ -134,6 +198,8 @@ export default function ProductDetailPage() {
           </div>
         </div>
       )}
+
+      {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
     </div>
   );
 }
