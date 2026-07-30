@@ -1,0 +1,16 @@
+export const EN_STRINGS = {
+  navShop: "Shop", navServices: "Services", navAbout: "About Us",
+  navMarketplace: "Explore Marketplace", navMentor: "Become a Mentor", navExchange: "Business Exchange",
+  navLogin: "Log in",
+  heroTitle: "Building a future where women rise without limits.",
+  heroSubtitle: "A marketplace by women, for a better world — handcrafted goods, mentorship and enterprise, together.",
+  heroShopNow: "Shop now!",
+  heroRegister: "Register your business now!",
+  dashSubmitted: "application submitted",
+  dashWelcome: "Welcome",
+  dashSubtitle: "Your onboarding team is reviewing your documents. While you wait, let's build your storefront.",
+  dashBuild: "Build your business",
+  dashOverview: "Overview", dashProducts: "Products", dashStorefront: "Storefront",
+  taskListTitle: "List your products",
+  taskStoreTitle: "Customize your storefront",
+};
