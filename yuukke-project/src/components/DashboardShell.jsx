@@ -3,13 +3,16 @@ import { LayoutDashboard, Package, Palette } from "lucide-react";
 import { theme } from "../theme";
 import { Logo } from "./Shared";
 import AskYuukke from "./AskYuukke";
+import { usePageTranslation } from "./I18nContext";
 
-export default function DashboardShell({ goTo, active, businessName, children, t, speechLang }) {
-  const translate = t || ((k) => k);
+const STRINGS = ["Overview", "Products", "Storefront", "Your store"];
+
+export default function DashboardShell({ goTo, active, businessName, children, speechLang }) {
+  const t = usePageTranslation(STRINGS);
   const tabs = [
-    { id: "dashboard", label: translate("dashOverview"), icon: LayoutDashboard },
-    { id: "listProducts", label: translate("dashProducts"), icon: Package },
-    { id: "customizeStore", label: translate("dashStorefront"), icon: Palette },
+    { id: "dashboard", label: t("Overview"), icon: LayoutDashboard },
+    { id: "listProducts", label: t("Products"), icon: Package },
+    { id: "customizeStore", label: t("Storefront"), icon: Palette },
   ];
   return (
     <div style={{ background: theme.cream, minHeight: "100%" }}>
@@ -35,7 +38,7 @@ export default function DashboardShell({ goTo, active, businessName, children, t
           <div style={{ width: 34, height: 34, borderRadius: "50%", background: theme.wineTint, color: theme.wine, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>
             {businessName ? businessName.trim()[0]?.toUpperCase() : "Y"}
           </div>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink }}>{businessName || "Your store"}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink }}>{businessName || t("Your store")}</span>
         </div>
       </div>
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "40px 24px 90px" }}>{children}</div>

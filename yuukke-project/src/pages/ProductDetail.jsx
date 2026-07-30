@@ -12,6 +12,14 @@ import { fetchProduct } from "../lib/products";
 import { useAuth } from "../components/AuthContext";
 import { useCart } from "../components/CartContext";
 import { useWishlist } from "../components/WishlistContext";
+import { usePageTranslation } from "../components/I18nContext";
+
+const STRINGS = [
+  "Back to marketplace", "My Orders", "Cart", "Log in", "Home", "Products",
+  "Loading product…", "We couldn't find that product.", "It may have been removed, or the link is incorrect.",
+  "* Price shown is excluding taxes", "QUANTITY:", "Added to cart!", "Add to Cart", "Buy Now",
+  "In Your Wishlist", "Add to Wishlist", "PRODUCT DETAILS", "No description provided yet.",
+];
 
 function Crumb({ children, last }) {
   return (
@@ -24,6 +32,7 @@ function Crumb({ children, last }) {
 export default function ProductDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const t = usePageTranslation(STRINGS);
   const { user } = useAuth();
   const { add: addToCart } = useCart();
   const { toggle: toggleWishlist, has: inWishlist } = useWishlist();
@@ -87,22 +96,22 @@ export default function ProductDetailPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 40px", borderBottom: `1px solid ${theme.line}`, background: theme.white }}>
         <a href="/"><Logo size={26} /></a>
         <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-          <a href="/marketplace" style={{ fontSize: 13.5, fontWeight: 600, color: theme.wine, textDecoration: "none" }}>Back to marketplace</a>
+          <a href="/marketplace" style={{ fontSize: 13.5, fontWeight: 600, color: theme.wine, textDecoration: "none" }}>{t("Back to marketplace")}</a>
           {user ? (
             <>
-              <a href="/orders" style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, textDecoration: "none" }}>My Orders</a>
-              <a href="/cart" style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, textDecoration: "none" }}>Cart</a>
+              <a href="/orders" style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, textDecoration: "none" }}>{t("My Orders")}</a>
+              <a href="/cart" style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, textDecoration: "none" }}>{t("Cart")}</a>
             </>
           ) : (
-            <span onClick={() => setShowLogin(true)} style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, cursor: "pointer" }}>Log in</span>
+            <span onClick={() => setShowLogin(true)} style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink, cursor: "pointer" }}>{t("Log in")}</span>
           )}
         </div>
       </div>
 
       <div style={{ padding: "16px 40px 0", display: "flex", alignItems: "center", gap: 6 }}>
-        <a href="/" style={{ textDecoration: "none" }}><Crumb>Home</Crumb></a>
+        <a href="/" style={{ textDecoration: "none" }}><Crumb>{t("Home")}</Crumb></a>
         <ChevronRight size={13} color={theme.inkSoft} />
-        <a href="/marketplace" style={{ textDecoration: "none" }}><Crumb>Products</Crumb></a>
+        <a href="/marketplace" style={{ textDecoration: "none" }}><Crumb>{t("Products")}</Crumb></a>
         {product && (
           <>
             <ChevronRight size={13} color={theme.inkSoft} />
@@ -113,14 +122,14 @@ export default function ProductDetailPage() {
 
       {status === "loading" && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "120px 20px", color: theme.inkSoft, gap: 10 }}>
-          <Spinner size={20} color={theme.wine} /> Loading product…
+          <Spinner size={20} color={theme.wine} /> {t("Loading product…")}
         </div>
       )}
 
       {status === "error" && (
         <div style={{ textAlign: "center", padding: "120px 20px" }}>
-          <p style={{ fontFamily: theme.fontDisplay, fontSize: 20, color: theme.ink, marginBottom: 8 }}>We couldn't find that product.</p>
-          <p style={{ fontSize: 13.5, color: theme.inkSoft }}>It may have been removed, or the link is incorrect.</p>
+          <p style={{ fontFamily: theme.fontDisplay, fontSize: 20, color: theme.ink, marginBottom: 8 }}>{t("We couldn't find that product.")}</p>
+          <p style={{ fontSize: 13.5, color: theme.inkSoft }}>{t("It may have been removed, or the link is incorrect.")}</p>
         </div>
       )}
 
@@ -158,10 +167,10 @@ export default function ProductDetailPage() {
             <p style={{ fontSize: 12, fontWeight: 700, color: theme.wine, letterSpacing: 1, margin: "0 0 8px" }}>{(product.category || "").toUpperCase()}</p>
             <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 30, color: theme.ink, margin: "0 0 16px", lineHeight: 1.25 }}>{product.name}</h1>
             <p style={{ fontSize: 30, fontWeight: 800, color: theme.ink, margin: "0 0 4px" }}>₹{Number(product.price).toLocaleString("en-IN")}</p>
-            <p style={{ fontSize: 12, color: theme.inkSoft, margin: "0 0 22px" }}>* Price shown is excluding taxes</p>
+            <p style={{ fontSize: 12, color: theme.inkSoft, margin: "0 0 22px" }}>{t("* Price shown is excluding taxes")}</p>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink }}>QUANTITY:</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink }}>{t("QUANTITY:")}</span>
               <select value={qty} onChange={(e) => setQty(+e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${theme.line}`, fontFamily: theme.fontBody }}>
                 {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
@@ -169,24 +178,24 @@ export default function ProductDetailPage() {
 
             {cartError && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 10 }}>{cartError}</p>}
             <button onClick={handleAddToCart} style={cartBtn(false)}>
-              {added ? <Check size={16} /> : <ShoppingCart size={16} />} {added ? "Added to cart!" : "Add to Cart"}
+              {added ? <Check size={16} /> : <ShoppingCart size={16} />} {added ? t("Added to cart!") : t("Add to Cart")}
             </button>
-            <button onClick={handleBuyNow} style={cartBtn(true)}><CreditCard size={16} /> Buy Now</button>
+            <button onClick={handleBuyNow} style={cartBtn(true)}><CreditCard size={16} /> {t("Buy Now")}</button>
             <button onClick={handleWishlist} style={{
               ...cartBtn(false),
               border: `1.5px solid ${inWishlist(product.id) ? theme.wine : theme.line}`,
               background: inWishlist(product.id) ? theme.wineTint : "none",
               color: inWishlist(product.id) ? theme.wine : theme.ink,
             }}>
-              <Heart size={16} fill={inWishlist(product.id) ? theme.wine : "none"} /> {inWishlist(product.id) ? "In Your Wishlist" : "Add to Wishlist"}
+              <Heart size={16} fill={inWishlist(product.id) ? theme.wine : "none"} /> {inWishlist(product.id) ? t("In Your Wishlist") : t("Add to Wishlist")}
             </button>
 
             <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 16, padding: 22, marginTop: 26 }}>
               <p style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: theme.ink, margin: "0 0 14px" }}>
-                <Info size={15} color={theme.wine} /> PRODUCT DETAILS
+                <Info size={15} color={theme.wine} /> {t("PRODUCT DETAILS")}
               </p>
               <p style={{ fontSize: 13.5, color: theme.inkSoft, lineHeight: 1.7, margin: product.dimensions ? "0 0 16px" : 0 }}>
-                {product.description || "No description provided yet."}
+                {product.description || t("No description provided yet.")}
               </p>
               {product.dimensions && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: theme.ink, fontWeight: 600, paddingTop: 14, borderTop: `1px solid ${theme.line}` }}>
