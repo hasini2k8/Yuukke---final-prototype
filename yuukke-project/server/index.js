@@ -17,11 +17,11 @@ import { generateOpenAIImage } from "./openaiProxy.js";
 import { askOpenAIText } from "./openaiText.js";
 import { createProfile, generateAuthUrl, listConnectedAccounts } from "./zernioClient.js";
 import { attemptPublish, refreshStatus } from "./socialSchedule.js";
-import { createVideo } from "./json2videoProxy.js";
+import { createVideo } from "./veoProxy.js";
 
 const SOCIAL_PLATFORMS = new Set(["instagram", "linkedin"]);
 
-const PORT = process.env.TRIPO_PROXY_PORT || 8791;
+const PORT = process.env.TRIPO_PROXY_PORT || 8792;
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -262,13 +262,6 @@ async function handleSite(req, res, url) {
   return false;
 }
 
-function parseDataUrl(dataUrl) {
-  const match = String(dataUrl || "").match(/^data:(.*?);base64,(.*)$/);
-  if (!match) return null;
-  const [, mimeType, base64] = match;
-  return { mimeType, buffer: Buffer.from(base64, "base64") };
-}
-
 // Zernio (server/zernioClient.js) owns the actual Instagram/LinkedIn OAuth,
 // through its own hosted login page — a seller never sees a developer
 // console or token. /connect creates the seller's Zernio profile on first
@@ -344,20 +337,6 @@ async function handleSocialAuth(req, res, url) {
 async function handlePosts(req, res, url) {
   if (!url.pathname.startsWith("/api/posts")) return false;
 
-  // Public — no seller header, keyed only by the post's own unguessable id.
-  // An external service (JSON2Video below, or a real platform's own posting
-  // API) fetches this server-to-server and has no way to send our
-  // X-Seller-Id header, so this can't sit behind the seller gate below.
-  const imageMatch = url.pathname.match(/^\/api\/posts\/([^/]+)\/image$/);
-  if (imageMatch && req.method === "GET") {
-    const post = await posts.getPostById(imageMatch[1]);
-    const parsed = post && parseDataUrl(post.imageDataUrl);
-    if (!parsed) { sendJson(res, 404, { message: "No image for that post." }); return true; }
-    res.writeHead(200, { "Content-Type": parsed.mimeType });
-    res.end(parsed.buffer);
-    return true;
-  }
-
   const sellerId = requireSeller(req, res);
   if (!sellerId) return true;
 
@@ -379,19 +358,17 @@ async function handlePosts(req, res, url) {
     return true;
   }
 
-  // Video generation (server/json2videoProxy.js) — wraps the post's own
-  // already-generated image (fetched by JSON2Video via the public route
-  // above) with the caption as a text overlay. Blocking: this app has no
-  // job queue, so the request just waits for the render (see
-  // json2videoProxy.js's MAX_WAIT_MS) rather than polling separately.
+  // Video generation (server/veoProxy.js) — animates the post's own
+  // already-generated image with Google's Veo model. Blocking: this app
+  // has no job queue, so the request just waits for the render (see
+  // veoProxy.js's MAX_WAIT_MS) rather than polling separately.
   const videoMatch = url.pathname.match(/^\/api\/posts\/([^/]+)\/video$/);
   if (videoMatch && req.method === "POST") {
     try {
       const post = await posts.getPost(sellerId, videoMatch[1]);
       if (!post) { sendJson(res, 404, { message: "Post not found" }); return true; }
       if (!post.imageDataUrl) { sendJson(res, 400, { message: "Generate the image for this post first." }); return true; }
-      const base = process.env.PUBLIC_BASE_URL || `http://${req.headers.host}`;
-      const { videoUrl } = await createVideo({ imagePublicUrl: `${base}/api/posts/${post.id}/image`, caption: post.caption });
+      const { videoUrl } = await createVideo({ imageDataUrl: post.imageDataUrl, caption: post.caption, topic: post.topic });
       const updated = await posts.updatePost(sellerId, post.id, { videoUrl });
       sendJson(res, 200, updated);
     } catch (e) {

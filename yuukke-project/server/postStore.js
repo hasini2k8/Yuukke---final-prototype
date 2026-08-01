@@ -36,14 +36,6 @@ export async function getPost(sellerId, id) {
   return toPost(get("SELECT * FROM posts WHERE id = ? AND seller_id = ?", [id, sellerId]));
 }
 
-// Cross-seller lookup, keyed only by the post's own unguessable id — used
-// for routes that can't carry a seller header, like the public image route
-// an external service (JSON2Video, or a real platform's own API) fetches
-// server-to-server (server/index.js's GET /api/posts/:id/image).
-export async function getPostById(id) {
-  return toPost(get("SELECT * FROM posts WHERE id = ?", [id]));
-}
-
 export async function createPost(sellerId, data) {
   const post = {
     id: crypto.randomUUID(),

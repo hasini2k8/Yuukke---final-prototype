@@ -45,7 +45,7 @@ export default function PostGeneratorChat({ config, speechLang, onPostsGenerated
     setMessages((m) => [
       ...m,
       { role: "user", content: format === "video" ? "Video reel" : "Image" },
-      { role: "assistant", content: format === "video" ? "Drafting the post and rendering a reel — video can take a minute or two, hang tight." : "Drafting the post…" },
+      { role: "assistant", content: format === "video" ? "Drafting the post and animating a reel with Veo — this genuinely renders a video, so it can take a few minutes. Hang tight." : "Drafting the post…" },
     ]);
     try {
       const context = [
@@ -73,9 +73,9 @@ export default function PostGeneratorChat({ config, speechLang, onPostsGenerated
       );
 
       if (format === "video") {
-        // Parallel, not sequential — each render can take up to 90s
-        // (server/json2videoProxy.js's MAX_WAIT_MS), so doing both at once
-        // instead of one-after-another avoids a ~3 minute wait.
+        // Parallel, not sequential — Veo renders can each take a few
+        // minutes (server/veoProxy.js's MAX_WAIT_MS), so doing both at once
+        // instead of one-after-another avoids doubling that wait.
         const results = await Promise.allSettled(created.map((p) => generateVideo(p.id)));
         const failures = [];
         created = created.map((p, i) => {

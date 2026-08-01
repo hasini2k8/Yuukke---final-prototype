@@ -37,9 +37,9 @@ export async function updatePost(id, patch) {
   return unwrap(res);
 }
 
-// Turns a post's already-generated image into a short video reel
-// (server/json2videoProxy.js) — blocking, can take up to ~90s while the
-// render finishes.
+// Turns a post's already-generated image into a short, AI-animated video
+// reel via Google's Veo model (server/veoProxy.js) — blocking, and can
+// take a few minutes while the render finishes.
 export async function generateVideo(id) {
   const res = await sellerFetch(`/api/posts/${id}/video`, { method: "POST" });
   return unwrap(res);

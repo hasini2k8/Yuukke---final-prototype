@@ -22,7 +22,7 @@ TRIPO_API_KEY=
 OPENAI_API_KEY=
 ZERNIO_API_KEY=
 PUBLIC_BASE_URL=
-JSON2VIDEO_API_KEY=
+GEMINI_API_KEY=
 ```
 
 | Variable | Used for | Where to get it |
@@ -30,8 +30,8 @@ JSON2VIDEO_API_KEY=
 | `TRIPO_API_KEY` | Generating rotatable 3D product previews from a photo (Tripo3D) | [developers.tripo3d.ai](https://developers.tripo3d.ai/) |
 | `OPENAI_API_KEY` | Every AI feature — the listing chatbot, photo analysis, storefront/business-identity generator, social post captions, Ask Yuukke assistant (Chat Completions), and business logos/social post graphics (gpt-image-1). Server-side only — never exposed to the browser | [platform.openai.com](https://platform.openai.com/api-keys) |
 | `ZERNIO_API_KEY` | Real, automated posting to Instagram and LinkedIn (see below) | [zernio.com](https://zernio.com/) |
-| `PUBLIC_BASE_URL` | Zernio's OAuth redirect URI, and the public URL JSON2Video fetches a post's image from — set to your deployed app's URL; falls back to whatever host the request came in on, which only works once actually deployed (JSON2Video can't reach a bare `localhost`) | — |
-| `JSON2VIDEO_API_KEY` | Turning a generated post image into a short video reel | [json2video.com](https://json2video.com/) |
+| `PUBLIC_BASE_URL` | Zernio's OAuth redirect URI — set to your deployed app's URL; falls back to whatever host the request came in on, which only works once actually deployed | — |
+| `GEMINI_API_KEY` | Turning a generated post image into a short AI-animated video reel (Google's Veo model) | [Google AI Studio](https://aistudio.google.com/apikey) |
 
 The app still runs without these — the features that depend on them will show an error instead of failing to build. `.env` is gitignored; never commit it.
 
@@ -45,9 +45,9 @@ Real posting goes through [Zernio](https://zernio.com/), a social-posting API th
 
 ### Video reels
 
-A seller can turn a generated post's image into a short video reel instead — the image becomes the background with the caption overlaid as text, rendered by [JSON2Video](https://json2video.com/) (`server/json2videoProxy.js`). JSON2Video fetches the image itself from `GET /api/posts/:id/image`, which is why that route is public (keyed only by the post's own unguessable id) rather than gated behind the seller header. **Requires `PUBLIC_BASE_URL` to actually be a publicly reachable URL** — this only works once deployed, not from a bare local dev server, since JSON2Video's servers can't reach `localhost`.
+A seller can turn a generated post's image into a short video reel instead of a static image — Google's [Veo](https://ai.google.dev/gemini-api/docs/veo) model (`server/veoProxy.js`) animates the post's own image directly (a gentle pan, ambient motion matching the post's mood), rather than just compositing text over a still frame. The image is sent to Veo as inline data, so this works from local dev too, not just once deployed — no public URL needed. Rendering is genuinely generative, so it can take a couple of minutes.
 
-**One-time setup:** sign up at [json2video.com](https://json2video.com/), grab an API key, and set `JSON2VIDEO_API_KEY` in `.env`.
+**One-time setup:** grab a key from [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY` in `.env`.
 
 ## 3. Run it
 
