@@ -15,7 +15,7 @@ function ctaStyle(bg) {
 const NEEDS = [
   { icon: Gift, title: "Personal Gifts", desc: "Birthdays, weddings, festive gifts" },
   { icon: Layers, title: "Corporate Gifts", desc: "Employee kits, hampers, CSR" },
-  { icon: ShoppingBag, title: "Products", desc: "Handcrafted, women-led brands" },
+  { icon: ShoppingBag, title: "Products", desc: "Handcrafted, independently-led brands" },
   { icon: Users, title: "Services", desc: "Experts, consultants, coaches" },
   { icon: GraduationCap, title: "Workshops", desc: "Sessions, classes, experiences" },
 ];
@@ -36,7 +36,7 @@ const CATEGORIES = [
 ];
 
 const STATS = [
-  { value: "700+", label: "Women artisans trained" },
+  { value: "700+", label: "Artisans trained" },
   { value: "200+", label: "Entrepreneurs onboarded" },
   { value: "3", label: "Districts reached, and growing" },
 ];
@@ -66,10 +66,10 @@ export default function HomePage({ goTo, openLogin }) {
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "70px 24px 60px", textAlign: "center" }}>
         <p style={{ fontSize: 12, fontWeight: 700, color: theme.wine, letterSpacing: 2, marginBottom: 18 }}>BUY BETTER · LIVE BETTER · BUILD BETTER</p>
         <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 44, color: theme.ink, margin: "0 0 18px", lineHeight: 1.2, maxWidth: 760, marginLeft: "auto", marginRight: "auto" }}>
-          Building a future where women rise without limits.
+          Building a future where entrepreneurs rise without limits.
         </h1>
         <p style={{ fontSize: 16, color: theme.inkSoft, maxWidth: 560, margin: "0 auto 36px", fontFamily: theme.fontBody, lineHeight: 1.6 }}>
-          Shop products, discover services, and choose meaningful gifts from women entrepreneurs. Every order supports income, market access, and independent futures.
+          Shop products, discover services, and choose meaningful gifts from independent entrepreneurs. Every order supports income, market access, and independent futures.
         </p>
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <button onClick={() => goTo("marketplace")} style={ctaStyle(theme.wine)}>Shop now!</button>
@@ -125,7 +125,7 @@ export default function HomePage({ goTo, openLogin }) {
             <>
               <h3 style={{ fontFamily: theme.fontDisplay, fontSize: 22, color: theme.ink, margin: "0 0 10px" }}>Turn talent into independence</h3>
               <p style={{ fontSize: 14, color: theme.inkSoft, lineHeight: 1.6, marginBottom: 20 }}>
-                A maker, creator, or entrepreneur building a business on her own terms, backed by a community that roots for her.
+                A maker, creator, or entrepreneur building a business on their own terms, backed by a community that roots for them.
               </p>
               <button onClick={() => goTo("register")} style={ctaStyle(theme.wine)}>Become a seller <ArrowRight size={14} /></button>
             </>
@@ -133,7 +133,7 @@ export default function HomePage({ goTo, openLogin }) {
             <>
               <h3 style={{ fontFamily: theme.fontDisplay, fontSize: 22, color: theme.ink, margin: "0 0 10px" }}>Discover & support them</h3>
               <p style={{ fontSize: 14, color: theme.inkSoft, lineHeight: 1.6, marginBottom: 20 }}>
-                Be among the first to discover remarkable products — and stand behind the women who made them. Every purchase builds a business.
+                Be among the first to discover remarkable products — and stand behind the makers behind them. Every purchase builds a business.
               </p>
               <button onClick={() => goTo("marketplace")} style={ctaStyle(theme.wine)}>Explore Marketplace <ArrowRight size={14} /></button>
             </>
@@ -154,7 +154,7 @@ export default function HomePage({ goTo, openLogin }) {
 
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "70px 24px" }}>
         <p style={{ fontSize: 12, fontWeight: 700, color: theme.wine, letterSpacing: 1.5, textAlign: "center", marginBottom: 10 }}>FEATURED CATEGORIES</p>
-        <h2 style={{ fontFamily: theme.fontDisplay, fontSize: 30, color: theme.ink, textAlign: "center", margin: "0 0 36px" }}>Explore products from women builders.</h2>
+        <h2 style={{ fontFamily: theme.fontDisplay, fontSize: 30, color: theme.ink, textAlign: "center", margin: "0 0 36px" }}>Explore products from independent builders.</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 18 }}>
           {CATEGORIES.map((c) => (
             <div key={c.title} onClick={() => goTo("marketplace")} style={{

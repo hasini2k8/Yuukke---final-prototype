@@ -25,7 +25,7 @@ export default function AboutPage() {
           Talent is everywhere. Opportunity isn't.
         </h1>
         <p style={{ fontSize: 15, color: theme.inkSoft, lineHeight: 1.7, marginBottom: 40 }}>
-          Yuukke exists because skill without market access stays invisible. We're a marketplace and enablement platform for women entrepreneurs — bridging the gap between real talent and the visibility, tools, and income it deserves.
+          Yuukke exists because skill without market access stays invisible. We're a marketplace and enablement platform for independent entrepreneurs — bridging the gap between real talent and the visibility, tools, and income it deserves.
         </p>
 
         <h2 style={{ fontFamily: theme.fontDisplay, fontSize: 22, color: theme.ink, margin: "0 0 28px" }}>Five pillars of enablement</h2>

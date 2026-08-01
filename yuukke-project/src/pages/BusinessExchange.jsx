@@ -6,7 +6,7 @@ import LoginModal from "../components/LoginModal";
 import { useAuth } from "../components/AuthContext";
 
 const BENEFITS = [
-  { icon: Handshake, title: "Corporate partnerships", desc: "Bulk hampers, employee kits, and CSR-linked procurement direct from women-led brands." },
+  { icon: Handshake, title: "Corporate partnerships", desc: "Bulk hampers, employee kits, and CSR-linked procurement direct from independently-led brands." },
   { icon: TrendingUp, title: "Growth support", desc: "Market linkage through expos, corporate vending, and digital orders — steady, repeatable income." },
   { icon: Globe2, title: "Wider reach", desc: "Get discovered by backers, mentors, and buyers well beyond your local market." },
 ];
@@ -28,7 +28,7 @@ export default function BusinessExchangePage() {
           Connect your business with builders who deliver.
         </h1>
         <p style={{ fontSize: 14.5, color: theme.inkSoft, lineHeight: 1.7, marginBottom: 40, maxWidth: 520, marginLeft: "auto", marginRight: "auto" }}>
-          Whether you're sourcing corporate gifts, looking for vendors, or want to bring women-led products into your own supply chain — the Business Exchange is where organizations and builders meet.
+          Whether you're sourcing corporate gifts, looking for vendors, or want to bring independently-led products into your own supply chain — the Business Exchange is where organizations and builders meet.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 18, marginBottom: 40, textAlign: "left" }}>

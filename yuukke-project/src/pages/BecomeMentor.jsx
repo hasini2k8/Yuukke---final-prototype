@@ -28,7 +28,7 @@ export default function BecomeMentorPage() {
           Be part of a small army rooting for builders.
         </h1>
         <p style={{ fontSize: 14.5, color: theme.inkSoft, lineHeight: 1.7, marginBottom: 40, maxWidth: 520, marginLeft: "auto", marginRight: "auto" }}>
-          When a woman entrepreneur realizes there's a community of experts backing her, she becomes unstoppable. Mentors bring the skills, connections, and encouragement that no course can replace.
+          When an entrepreneur realizes there's a community of experts backing them, they become unstoppable. Mentors bring the skills, connections, and encouragement that no course can replace.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 18, marginBottom: 40, textAlign: "left" }}>
