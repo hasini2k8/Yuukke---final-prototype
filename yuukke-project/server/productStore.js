@@ -102,3 +102,23 @@ export async function createProduct(data, sellerId = null) {
   );
   return product;
 }
+
+// Only the seller who created a listing can edit it — used by the listing
+// chatbot's progressive extraction (ListProducts.jsx) to refresh a product
+// already on the storefront as the conversation adds more detail, instead
+// of creating a duplicate every time.
+export async function updateProduct(id, sellerId, patch) {
+  const existing = toProduct(get("SELECT * FROM products WHERE id = ? AND seller_id = ?", [id, sellerId]));
+  if (!existing) return null;
+  const merged = { ...existing, ...patch };
+  run(
+    `UPDATE products SET name = ?, description = ?, category = ?, price = ?, dimensions = ?, model_url = ?, preview_color = ?, image_preview = ?, in_stock = ?
+     WHERE id = ? AND seller_id = ?`,
+    [
+      merged.name, merged.description, merged.category, merged.price,
+      merged.dimensions ? JSON.stringify(merged.dimensions) : null, merged.modelUrl, merged.previewColor,
+      merged.imagePreview, merged.inStock ? 1 : 0, id, sellerId,
+    ]
+  );
+  return toProduct(get("SELECT * FROM products WHERE id = ?", [id]));
+}

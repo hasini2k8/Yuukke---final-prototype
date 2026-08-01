@@ -4,7 +4,7 @@ import { theme } from "../theme";
 import { Spinner } from "./Shared";
 import { generateSplatFromImage } from "../lib/tripo";
 import { getAverageColor } from "../lib/color";
-import { askGeminiVision } from "../lib/ai";
+import { askOpenAIVision } from "../lib/ai";
 import { speak } from "../lib/speech";
 import SplatViewer from "./SplatViewer";
 
@@ -91,7 +91,7 @@ export default function ProductDetailCard({ draft, onComplete, onCancel, speechL
   async function describePhoto(dataUrl) {
     setPhotoDescStatus("analyzing");
     try {
-      const desc = await askGeminiVision(
+      const desc = await askOpenAIVision(
         PHOTO_CHECK_SYSTEM_PROMPT,
         "Describe this product photo for a seller who can't see it clearly right now, and flag anything about the photo quality itself that might be a problem.",
         dataUrl

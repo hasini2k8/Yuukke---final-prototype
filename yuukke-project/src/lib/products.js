@@ -1,9 +1,9 @@
 // Talks to the local product catalog store (server/productStore.js) via the
 // same /api proxy used for Tripo3D. Reading the catalog is public (the
-// marketplace); creating/listing "my" products needs the seller's auth
-// token. Local dev only for now — see server/productStore.js for the
-// production-persistence caveat.
-import { authFetch } from "./auth";
+// marketplace); creating/listing "my" products is scoped to the seller's
+// anonymous id (src/lib/sellerId.js) — no login involved. Local dev only
+// for now — see server/productStore.js for the production-persistence caveat.
+import { sellerFetch } from "./sellerId";
 
 async function unwrap(response) {
   const data = await response.json().catch(() => null);
@@ -19,7 +19,7 @@ export async function fetchProducts() {
 }
 
 export async function fetchMyProducts() {
-  const res = await authFetch("/api/products/mine");
+  const res = await sellerFetch("/api/products/mine");
   return unwrap(res);
 }
 
@@ -29,10 +29,19 @@ export async function fetchProduct(id) {
 }
 
 export async function saveProduct(product) {
-  const res = await authFetch("/api/products", {
+  const res = await sellerFetch("/api/products", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(product),
+  });
+  return unwrap(res);
+}
+
+export async function updateProduct(id, patch) {
+  const res = await sellerFetch(`/api/products/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
   });
   return unwrap(res);
 }

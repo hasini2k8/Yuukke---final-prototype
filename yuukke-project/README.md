@@ -19,27 +19,35 @@ Create a `.env` file in the project root:
 
 ```bash
 TRIPO_API_KEY=
-VITE_GEMINI_API_KEY=
 OPENAI_API_KEY=
 ZERNIO_API_KEY=
+PUBLIC_BASE_URL=
+JSON2VIDEO_API_KEY=
 ```
 
 | Variable | Used for | Where to get it |
 |---|---|---|
 | `TRIPO_API_KEY` | Generating rotatable 3D product previews from a photo (Tripo3D) | [developers.tripo3d.ai](https://developers.tripo3d.ai/) |
-| `VITE_GEMINI_API_KEY` | All *text* AI features — the listing chatbot, photo analysis, storefront/business-identity generator, social post captions, Ask Yuukke assistant | [Google AI Studio](https://aistudio.google.com/apikey) |
-| `OPENAI_API_KEY` | Image generation — business logos and social post graphics (gpt-image-1). Server-side only, unlike the other keys above — never exposed to the browser | [platform.openai.com](https://platform.openai.com/api-keys) |
-| `ZERNIO_API_KEY` | Real, automated posting to Instagram/LinkedIn/Pinterest (see below) | [zernio.com](https://zernio.com/) |
+| `OPENAI_API_KEY` | Every AI feature — the listing chatbot, photo analysis, storefront/business-identity generator, social post captions, Ask Yuukke assistant (Chat Completions), and business logos/social post graphics (gpt-image-1). Server-side only — never exposed to the browser | [platform.openai.com](https://platform.openai.com/api-keys) |
+| `ZERNIO_API_KEY` | Real, automated posting to Instagram and LinkedIn (see below) | [zernio.com](https://zernio.com/) |
+| `PUBLIC_BASE_URL` | Zernio's OAuth redirect URI, and the public URL JSON2Video fetches a post's image from — set to your deployed app's URL; falls back to whatever host the request came in on, which only works once actually deployed (JSON2Video can't reach a bare `localhost`) | — |
+| `JSON2VIDEO_API_KEY` | Turning a generated post image into a short video reel | [json2video.com](https://json2video.com/) |
 
 The app still runs without these — the features that depend on them will show an error instead of failing to build. `.env` is gitignored; never commit it.
 
-### Publishing to Instagram, LinkedIn, and Pinterest
+### Publishing to Instagram and LinkedIn
 
-Real posting goes through [Zernio](https://zernio.com/), a social-posting API that already has Meta/LinkedIn/Pinterest approval. This matters because a seller here is a small-business owner, not a developer — they can't be expected to register their own app with each platform or generate an access token. Instead, on the Storefront tab, a seller types their Instagram handle and clicks one "Connect my accounts" button, which opens Zernio's own hosted login page — they authorize the same way they'd normally log in, no tokens or developer terms ever shown. Pinterest and LinkedIn can be connected the same way via the small badge buttons next to Instagram's. Posts generated in the Social calendar are scheduled with Zernio automatically (`scheduledFor`), so they publish themselves for real at the scheduled time — Zernio's own infrastructure fires them, not this app, so it works even if the local dev server isn't running at that exact moment. Images are uploaded directly from our server to Zernio's storage (not read from a public URL on our end), so this works from local dev too, not just once deployed.
+Real posting goes through [Zernio](https://zernio.com/), a social-posting API that already has Meta's and LinkedIn's platform approvals. This matters because a seller here is a small-business owner, not a developer — they shouldn't have to register their own app with each platform or generate an access token. Instead, on the Storefront tab, a seller clicks "Connect" next to Instagram or LinkedIn, which opens Zernio's own hosted login page (`server/zernioClient.js`) — they authorize the same way they'd normally log in, no tokens or developer terms ever shown, and our server never sees their password. Once connected, the AI (OpenAI Chat Completions for captions, gpt-image-1 for the image) drafts posts for that seller's own account, and each confirmed post is handed to Zernio with its scheduled date — Zernio's own infrastructure fires it for real at that time (`server/socialSchedule.js`), so it works even if this app's server isn't running at that exact moment. Images are uploaded directly from our server to Zernio's storage (not read from a public URL on our end), so this works from local dev too, not just once deployed.
 
-**Cost: free for the first 2 connected accounts, no credit card.** Beyond that it's $6/account/month (accounts 3–10), dropping to $3/account (11–100) — no monthly base fee, no contract.
+**Cost: free for the first 2 connected accounts, no credit card.** Beyond that it's Zernio's own per-account pricing — no cost to run this app itself.
 
-**One-time setup:** sign up at [zernio.com](https://zernio.com/) (free), go to Settings → API Keys, create a key, and set `ZERNIO_API_KEY` in `.env`. That's it — no domain verification or key-pair setup needed.
+**One-time setup:** sign up at [zernio.com](https://zernio.com/) (free), go to Settings → API Keys, create a key, and set `ZERNIO_API_KEY` in `.env`. That's it — no per-platform developer app, no domain verification.
+
+### Video reels
+
+A seller can turn a generated post's image into a short video reel instead — the image becomes the background with the caption overlaid as text, rendered by [JSON2Video](https://json2video.com/) (`server/json2videoProxy.js`). JSON2Video fetches the image itself from `GET /api/posts/:id/image`, which is why that route is public (keyed only by the post's own unguessable id) rather than gated behind the seller header. **Requires `PUBLIC_BASE_URL` to actually be a publicly reachable URL** — this only works once deployed, not from a bare local dev server, since JSON2Video's servers can't reach `localhost`.
+
+**One-time setup:** sign up at [json2video.com](https://json2video.com/), grab an API key, and set `JSON2VIDEO_API_KEY` in `.env`.
 
 ## 3. Run it
 
@@ -85,10 +93,10 @@ kill <the PID from above>
 Then run `npm run dev` again.
 
 **AI features return an error**
-Check that `VITE_GEMINI_API_KEY` is set in `.env` and restart `npm run dev` (Vite only reads `.env` on startup).
+Check that `OPENAI_API_KEY` is set in `.env` and restart `npm run dev`.
 
 **3D preview generation fails**
 Check that `TRIPO_API_KEY` is set in `.env` and restart `npm run dev`.
 
-**"Connect my accounts" or scheduled posts fail**
+**"Connect" or scheduled posts fail**
 Check that `ZERNIO_API_KEY` is set in `.env` and restart `npm run dev`.

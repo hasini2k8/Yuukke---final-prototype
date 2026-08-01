@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, Wand2, Camera, Briefcase, Pin, Check, Copy, ExternalLink, Sparkles, Calendar } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Camera, Briefcase, Check, Copy, ExternalLink, Sparkles, Calendar } from "lucide-react";
 import { theme, ACCENTS, ALL_SECTIONS } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import StorePreview from "../components/StorePreview";
 import { Spinner } from "../components/Shared";
-import MicButton from "../components/MicButton";
 import SpeakButton from "../components/SpeakButton";
-import { askGeminiJSON, generateImage, buildSurveyContext, BUSINESS_SITE_SYSTEM_PROMPT } from "../lib/ai";
+import TalkAnalyseExecuteBar from "../components/TalkAnalyseExecuteBar";
+import PostGeneratorChat from "../components/PostGeneratorChat";
+import GeneratedPostsPanel from "../components/GeneratedPostsPanel";
+import { useTalkAnalyseExecute } from "../hooks/useTalkAnalyseExecute";
+import { generateImage, buildEditContext, BUSINESS_SITE_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite, saveSite } from "../lib/site";
 import { connectPlatform, fetchConnections, disconnectPlatform } from "../lib/social";
+import { fetchPosts } from "../lib/posts";
 import { EN_STRINGS } from "../lib/strings";
 
 const HERO_STYLES = ["minimal", "bold", "warm", "festive"];
@@ -16,7 +20,6 @@ const HERO_STYLES = ["minimal", "bold", "warm", "festive"];
 const PLATFORM_LABELS = {
   instagram: { label: "Instagram", icon: Camera },
   linkedin: { label: "LinkedIn", icon: Briefcase },
-  pinterest: { label: "Pinterest", icon: Pin },
 };
 
 const DEFAULT_CONFIG = {
@@ -26,12 +29,20 @@ const DEFAULT_CONFIG = {
   slug: "", published: false,
 };
 
-export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, products, businessProfile, speechLang }) {
-  const [description, setDescription] = useState("");
+// Only the fields the AI actually owns — config also carries slug/published/
+// connections and other non-AI bookkeeping that shouldn't round-trip through
+// the edit prompt.
+function siteAIFields(c) {
+  return {
+    businessName: c.businessName, tagline: c.tagline, about: c.about, accentColor: c.accentColor,
+    heroStyle: c.heroStyle, sections: c.sections, category: c.category, isTech: c.isTech, logoPrompt: c.logoPrompt,
+  };
+}
+
+export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, products, speechLang }) {
   const [config, setConfig] = useState({ ...DEFAULT_CONFIG, ...storeConfig });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [logoLoading, setLogoLoading] = useState(false);
+  const [siteLoaded, setSiteLoaded] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState("");
@@ -39,39 +50,64 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
   const [connectingPlatform, setConnectingPlatform] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [connectError, setConnectError] = useState("");
+  const [existingPosts, setExistingPosts] = useState([]);
+  const [pendingPosts, setPendingPosts] = useState([]);
+  const autoRanWebsite = useRef(false);
+  const autoRanLogo = useRef(false);
 
   useEffect(() => {
     fetchSite().then((saved) => {
       if (saved) setConfig((c) => ({ ...c, ...saved }));
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setSiteLoaded(true));
     loadConnections();
+    // "pending" posts are staged for review here (PostGeneratorChat /
+    // GeneratedPostsPanel below) — everything else is already calendar-
+    // visible and is what pickRandomSlot checks density against.
+    fetchPosts().then((all) => {
+      setExistingPosts(all.filter((p) => p.status !== "pending"));
+      setPendingPosts(all.filter((p) => p.status === "pending"));
+    }).catch(() => {});
   }, []);
 
   function loadConnections() {
     return fetchConnections().then(setConnections).catch(() => {});
   }
 
-  async function generate() {
-    if (!description.trim()) return;
-    setLoading(true);
-    setError("");
-    try {
-      const result = await askGeminiJSON(BUSINESS_SITE_SYSTEM_PROMPT, buildSurveyContext(businessProfile) + description);
+  // Talk, analyse, execute — a full default identity (name, tagline, story,
+  // colors, logo prompt) appears the moment the storefront tab is opened
+  // for the first time, with no description required; the bar below is
+  // then how the seller refines it, by voice or typing, same loop either way.
+  const websiteEdit = useTalkAnalyseExecute({
+    system: BUSINESS_SITE_SYSTEM_PROMPT,
+    buildContext: (instruction) => buildEditContext({
+      base: "A small business storefront on Yuukke, a marketplace for handmade and small-business goods in India.",
+      current: config.businessName ? siteAIFields(config) : null,
+      instruction,
+    }),
+    onExecute: async (result) => {
       setConfig((c) => ({ ...c, ...result }));
-    } catch (e) {
-      setError("Couldn't generate a theme just now. Feel free to adjust the options below by hand.");
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+  });
 
-  async function generateLogo() {
-    setLogoLoading(true);
+  useEffect(() => {
+    if (!siteLoaded || autoRanWebsite.current || config.businessName) return;
+    autoRanWebsite.current = true;
+    websiteEdit.run("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteLoaded, config.businessName]);
+
+  // Logo isn't a JSON-shaped edit like the rest of the site, so this folds
+  // the instruction into the image prompt directly rather than going
+  // through useTalkAnalyseExecute — same talk/analyse/execute shape, just a
+  // text-to-image "analyse" step instead of a text-to-JSON one.
+  async function runLogo(instruction) {
+    setLogoBusy(true);
     setLogoError("");
     try {
-      const prompt = `${config.logoPrompt || "A simple, modern icon-style logo mark"} — for a small business called "${config.businessName || "this business"}". Flat vector style, single focal icon, primary color ${config.accentColor}, plain background, no text.`;
+      const promptSeed = instruction || config.logoPrompt || "A simple, modern icon-style logo mark";
+      const prompt = `${promptSeed} — for a small business called "${config.businessName || "this business"}". Flat vector style, single focal icon, primary color ${config.accentColor}, plain background, no text.`;
       const logoDataUrl = await generateImage(prompt);
-      setConfig((c) => ({ ...c, logoDataUrl }));
+      setConfig((c) => ({ ...c, logoDataUrl, logoPrompt: instruction ? promptSeed : c.logoPrompt }));
       // If the site's already live, push the new logo immediately instead of
       // waiting for a separate Publish/Republish click — otherwise a
       // regenerated logo silently doesn't show up anywhere the seller can see.
@@ -81,9 +117,16 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     } catch (e) {
       setLogoError(e.message || "Couldn't generate a logo just now.");
     } finally {
-      setLogoLoading(false);
+      setLogoBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!config.businessName || config.logoDataUrl || autoRanLogo.current) return;
+    autoRanLogo.current = true;
+    runLogo("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.businessName, config.logoDataUrl]);
 
   async function publishSite() {
     setPublishing(true);
@@ -98,8 +141,9 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     }
   }
 
-  // One click per platform — real OAuth doesn't need a username typed in
-  // ahead of time, the platform tells us who logged in once they're done.
+  // One click per platform — Zernio's own hosted login page handles the
+  // actual OAuth (server/zernioClient.js), so no username needs typing in
+  // ahead of time; Zernio tells us who logged in once they're done.
   async function connectSocial(platform) {
     setConnectingPlatform(platform);
     setConnectError("");
@@ -171,29 +215,30 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
       </span>
       <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 28, color: theme.ink, margin: "0 0 8px" }}>Customize your storefront</h1>
       <p style={{ fontSize: 14.5, color: theme.inkSoft, marginBottom: 26, fontFamily: theme.fontBody, maxWidth: 560 }}>
-        Describe the mood you want and Yuukke's AI will suggest a starting theme — an accent color, tagline, and layout — which you can fine-tune below.
+        A starting theme appears automatically — name, tagline, story, colors, and logo. Tell it what to change, by voice or typing, and it updates right away.
       </p>
 
       <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 320px", minWidth: 300 }}>
           <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
-            <label style={{ display: "block", marginBottom: 14 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Describe the look and feel you want</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. warm and earthy, festive but not loud, feels handmade"
-                  style={{ flex: 1, minWidth: 0, padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical" }} />
-                <MicButton size={34} lang={speechLang} onResult={(t) => setDescription((v) => (v ? `${v} ${t}` : t))} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>
+              {config.businessName ? "Change the look and feel" : "Describe the look and feel you want"}
+            </span>
+            {!config.businessName && websiteEdit.busy ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: theme.inkSoft, fontSize: 13 }}>
+                <Spinner size={14} /> Designing your starting theme…
               </div>
-            </label>
-            {error && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 12 }}>{error}</p>}
-            <button onClick={generate} disabled={loading || !description.trim()} style={{
-              display: "flex", alignItems: "center", gap: 8, background: theme.ink, color: "#fff", border: "none",
-              borderRadius: 12, padding: "11px 20px", fontWeight: 700, fontSize: 13, cursor: !description.trim() ? "default" : "pointer",
-              opacity: !description.trim() ? 0.5 : 1,
-            }}>
-              {loading ? <Spinner /> : <Wand2 size={14} />} {loading ? "Designing…" : "Generate theme"}
-            </button>
+            ) : (
+              <TalkAnalyseExecuteBar
+                placeholder="e.g. warm and earthy, festive but not loud, feels handmade"
+                busy={websiteEdit.busy}
+                error={websiteEdit.error}
+                onSubmit={websiteEdit.run}
+                speechLang={speechLang}
+                busyLabel="Updating…"
+                idleLabel={config.businessName ? "Update theme" : "Generate theme"}
+              />
+            )}
           </div>
 
           <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
@@ -244,7 +289,7 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
           <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
             <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 4 }}>Your business website</p>
             <p style={{ fontSize: 12, color: theme.inkSoft, marginBottom: 16, lineHeight: 1.5 }}>
-              Generated from the description above — Yuukke's AI names your business, writes its story, and designs a logo. Publish it to get a real page your customers can visit.
+Generated automatically above — Yuukke's AI names your business, writes its story, and designs a logo. Publish it to get a real page your customers can visit.
             </p>
 
             <label style={{ display: "block", marginBottom: 14 }}>
@@ -271,20 +316,25 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
                 width: 64, height: 64, borderRadius: 14, background: theme.creamDark, flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: `1px solid ${theme.line}`,
               }}>
-                {config.logoDataUrl ? (
+                {logoBusy && !config.logoDataUrl ? (
+                  <Spinner size={16} color={theme.inkSoft} />
+                ) : config.logoDataUrl ? (
                   <img src={config.logoDataUrl} alt="Business logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <Sparkles size={20} color={theme.inkSoft} />
                 )}
               </div>
-              <div>
-                <button onClick={generateLogo} disabled={logoLoading} style={{
-                  display: "flex", alignItems: "center", gap: 7, background: theme.creamDark, color: theme.ink, border: "none",
-                  borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 12.5, cursor: "pointer", marginBottom: 6,
-                }}>
-                  {logoLoading ? <Spinner size={13} /> : <Wand2 size={13} />} {logoLoading ? "Designing…" : config.logoDataUrl ? "Regenerate logo" : "Generate logo"}
-                </button>
-                {logoError && <p style={{ color: "#a32d2d", fontSize: 12, margin: 0 }}>{logoError}</p>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 6 }}>Logo</span>
+                <TalkAnalyseExecuteBar
+                  placeholder="e.g. a simple leaf icon, rounder shapes, a different color"
+                  busy={logoBusy}
+                  error={logoError}
+                  onSubmit={runLogo}
+                  speechLang={speechLang}
+                  busyLabel="Designing…"
+                  idleLabel={config.logoDataUrl ? "Update logo" : "Generate logo"}
+                />
               </div>
             </div>
 
@@ -311,7 +361,7 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
 
             <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 10 }}>Connect your socials</p>
             <p style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
-              One click per platform, no technical setup. You'll log in the same way you already do — nothing to copy or paste, and no passwords are ever shared with Yuukke.
+              One click per platform — Zernio handles the login, no developer accounts or tokens to set up. You'll log in the same way you already do, and no passwords are ever shared with Yuukke.
             </p>
 
             {connectError && <p style={{ color: "#a32d2d", fontSize: 11.5, margin: "0 0 10px" }}>{connectError}</p>}
@@ -352,21 +402,29 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
 
             <button onClick={refreshConnections} disabled={refreshing} style={{
               display: "flex", alignItems: "center", gap: 7, background: "none", border: `1.5px solid ${theme.line}`, color: theme.ink,
-              borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginBottom: 16,
+              borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer",
             }}>
               {refreshing ? <Spinner size={12} color={theme.ink} /> : null} Refresh status
             </button>
-
-            {config.published && connections.length > 0 && (
-              <button onClick={() => goTo("calendar")} style={{
-                display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "center",
-                background: theme.wine, color: "#fff", border: "none", borderRadius: 12, padding: "11px 16px",
-                fontWeight: 700, fontSize: 13, cursor: "pointer",
-              }}>
-                <Calendar size={14} /> Plan your posts
-              </button>
-            )}
           </div>
+
+          {config.businessName && (
+            <PostGeneratorChat
+              config={config}
+              speechLang={speechLang}
+              onPostsGenerated={(created) => setPendingPosts((p) => [...p, ...created])}
+            />
+          )}
+
+          {config.published && (
+            <button onClick={() => goTo("calendar")} style={{
+              display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "center",
+              background: "none", border: `1.5px solid ${theme.line}`, color: theme.ink, borderRadius: 12, padding: "11px 16px",
+              fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 20,
+            }}>
+              <Calendar size={14} /> View social calendar
+            </button>
+          )}
 
           <button onClick={save} style={{ background: theme.wine, color: "#fff", border: "none", borderRadius: 12, padding: "13px 28px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
             Save storefront & continue
@@ -376,6 +434,16 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
         <div style={{ flex: "1 1 320px", minWidth: 300 }}>
           <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 12 }}>Live preview</p>
           <StorePreview storeConfig={config} products={products} />
+          <GeneratedPostsPanel
+            posts={pendingPosts}
+            existingPosts={existingPosts}
+            goTo={goTo}
+            onDeleted={(id) => setPendingPosts((p) => p.filter((x) => x.id !== id))}
+            onSubmitted={(updated) => {
+              setPendingPosts((p) => p.filter((x) => !updated.some((u) => u.id === x.id)));
+              setExistingPosts((p) => [...p, ...updated]);
+            }}
+          />
         </div>
       </div>
     </DashboardShell>

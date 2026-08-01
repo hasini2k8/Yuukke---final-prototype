@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Camera, Briefcase, Pin, Sparkles, ArrowRight } from "lucide-react";
+import { Camera, Briefcase, Sparkles, ArrowRight } from "lucide-react";
 import { theme } from "../theme";
 import { Logo, Spinner } from "../components/Shared";
 import { fetchPublicSite } from "../lib/site";
 import { fetchProducts } from "../lib/products";
 
-const PLATFORM_ICONS = { instagram: Camera, linkedin: Briefcase, pinterest: Pin };
+const PLATFORM_ICONS = { instagram: Camera, linkedin: Briefcase };
 
 export default function GeneratedSitePage() {
   const { slug } = useParams();

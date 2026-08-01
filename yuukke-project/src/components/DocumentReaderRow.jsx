@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { Upload, Volume2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { theme } from "../theme";
 import { Spinner } from "./Shared";
-import { askGeminiVisionJSON } from "../lib/ai";
+import { askOpenAIVisionJSON } from "../lib/ai";
 import { speak } from "../lib/speech";
 
 const SYSTEM_PROMPT =
@@ -27,7 +27,7 @@ export default function DocumentReaderRow({ label, speechLang }) {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const data = await askGeminiVisionJSON(
+        const data = await askOpenAIVisionJSON(
           SYSTEM_PROMPT,
           `This is a photo of the seller's "${label}" document. Read it and describe it as instructed.`,
           reader.result

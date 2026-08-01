@@ -7,8 +7,8 @@ import { ChatBubble, UniquenessCard, PhotoInsightCard } from "../components/Chat
 import ProductDetailCard from "../components/ProductDetailCard";
 import SplatViewer from "../components/SplatViewer";
 import MicButton from "../components/MicButton";
-import { askGeminiJSON, askGeminiChat, askGeminiVision, checkUniqueness, buildSurveyContext, PRODUCT_LISTING_SYSTEM_PROMPT, PRODUCT_UNIQUENESS_VISION_PROMPT, CHAT_SYSTEM_PROMPT } from "../lib/ai";
-import { saveProduct } from "../lib/products";
+import { askOpenAIJSON, askOpenAIChat, askOpenAIVision, checkUniqueness, PRODUCT_LISTING_SYSTEM_PROMPT, PRODUCT_UNIQUENESS_VISION_PROMPT, CHAT_SYSTEM_PROMPT } from "../lib/ai";
+import { saveProduct, updateProduct } from "../lib/products";
 import { isVoiceInputSupported } from "../lib/speech";
 import { EN_STRINGS } from "../lib/strings";
 
@@ -20,7 +20,7 @@ function miniInput(bold) {
   };
 }
 
-export default function ListProductsPage({ goTo, products, setProducts, businessProfile, speechLang }) {
+export default function ListProductsPage({ goTo, products, setProducts, speechLang }) {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi! Tell me a bit about what you make or sell — you can type, or tap the mic and speak." },
   ]);
@@ -67,14 +67,19 @@ export default function ListProductsPage({ goTo, products, setProducts, business
     } else {
       setChatLoading(true);
       try {
-        const chatSystemPrompt = businessProfile ? `${CHAT_SYSTEM_PROMPT}\n\n${buildSurveyContext(businessProfile)}Use that context instead of asking them to repeat it.` : CHAT_SYSTEM_PROMPT;
-        const reply = await askGeminiChat(chatSystemPrompt, nextMessages);
+        const reply = await askOpenAIChat(CHAT_SYSTEM_PROMPT, nextMessages);
         setMessages((m) => [...m, { role: "assistant", content: reply }]);
       } catch (e) {
         setMessages((m) => [...m, { role: "assistant", content: "Sorry, I had trouble responding just now — could you try again?" }]);
       } finally {
         setChatLoading(false);
       }
+    }
+    // Talk, and it lands on the storefront as you go — a longer message is
+    // usually descriptive enough to be worth re-checking for a listing,
+    // without firing an AI call after every short "ok"/"thanks".
+    if (value.trim().length > 15) {
+      reconcileListings(nextMessages.filter((m) => m.role === "user").map((m) => m.content), savedDescriptions);
     }
   }
 
@@ -94,7 +99,7 @@ export default function ListProductsPage({ goTo, products, setProducts, business
 
   async function analyzePhoto(id, dataUrl) {
     try {
-      const text = await askGeminiVision(
+      const text = await askOpenAIVision(
         PRODUCT_UNIQUENESS_VISION_PROMPT,
         "What makes this product stand out from a generic version of the same kind of item?",
         dataUrl
@@ -118,8 +123,10 @@ export default function ListProductsPage({ goTo, products, setProducts, business
   }
   function confirmCheck(i, msg) {
     updateCheckMsg(i, "confirmed");
-    setSavedDescriptions((d) => [...d, msg.rewritten]);
+    const nextSaved = [...savedDescriptions, msg.rewritten];
+    setSavedDescriptions(nextSaved);
     setMessages((m) => [...m, { role: "assistant", content: "Great — I've saved that description. Tell me about another product whenever you're ready." }]);
+    reconcileListings(messages.filter((m) => m.role === "user").map((m) => m.content), nextSaved);
   }
   function declineCheck(i) {
     updateCheckMsg(i, "declined");
@@ -129,19 +136,65 @@ export default function ListProductsPage({ goTo, products, setProducts, business
     runUniquenessCheck(msg.original);
   }
 
+  // Existing names are handed back to the AI on every re-extraction
+  // (buildListingSummary) so it keeps reusing them for the same product
+  // instead of inventing a slightly different name each time — exact-name
+  // matching below is what decides "same product" vs. "new one," so a
+  // renamed product would otherwise show up as a duplicate.
+  function buildListingSummary(userTexts, saved, existingNames) {
+    const namesBlock = existingNames.length
+      ? `\n\nAlready-listed product names — if a message describes an update to one of these (not a new product), reuse its exact name unchanged: ${existingNames.join(", ")}`
+      : "";
+    return userTexts.join("\n") + "\n\nConfirmed descriptions:\n" + saved.join("\n") + namesBlock;
+  }
+
+  // "Send to storefront as we converse" — re-extracts listings after each
+  // exchange (not just on the manual button below) and reconciles by
+  // product name: a name already in the draft gets its fields refreshed
+  // (and, if it's already saved, updated on the server) rather than
+  // duplicated; a new name gets added and saved immediately. Best-effort —
+  // failures here are silent since the manual "Turn into listings" button
+  // is always available as a fallback.
+  async function reconcileListings(userTexts, saved) {
+    let result;
+    try {
+      const existingNames = draft.map((d) => d.name).filter(Boolean);
+      result = await askOpenAIJSON(PRODUCT_LISTING_SYSTEM_PROMPT, buildListingSummary(userTexts, saved, existingNames));
+    } catch (e) {
+      return;
+    }
+    const listings = result?.listings;
+    if (!Array.isArray(listings)) return;
+    for (const item of listings) {
+      if (!item?.name?.trim()) continue;
+      const existing = draft.find((d) => d.name && d.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+      if (!existing) {
+        saveProduct(item).then((created) => {
+          setDraft((cur) => (cur.some((d) => d.id === created.id) ? cur : [...cur, created]));
+          setProducts((prev) => [...prev, created]);
+        }).catch(() => {});
+      } else if (existing.id && (existing.description !== item.description || existing.category !== item.category || Number(existing.price) !== Number(item.price))) {
+        const patch = { name: item.name, category: item.category, price: item.price, description: item.description };
+        updateProduct(existing.id, patch).then((updated) => {
+          setDraft((cur) => cur.map((d) => (d.id === existing.id ? { ...d, ...updated } : d)));
+          setProducts((prev) => prev.map((p) => (p.id === existing.id ? { ...p, ...updated } : p)));
+        }).catch(() => {});
+      }
+    }
+  }
+
+  // The manual fallback/force-refresh button — reuses the same
+  // reconcile-by-name logic as the automatic background pass (so re-running
+  // it doesn't create duplicates of anything already auto-saved), just
+  // awaited with its own loading/error state for an explicit click.
   async function generateListings() {
     setGenLoading(true);
     setGenError("");
     try {
-      const summary =
-        buildSurveyContext(businessProfile) +
-        messages.filter((m) => m.role === "user").map((m) => m.content).join("\n") +
-        "\n\nConfirmed descriptions:\n" + savedDescriptions.join("\n");
-      const result = await askGeminiJSON(PRODUCT_LISTING_SYSTEM_PROMPT, summary);
-      setDraft(Array.isArray(result) ? result : []);
+      await reconcileListings(messages.filter((m) => m.role === "user").map((m) => m.content), savedDescriptions);
+      setDraft((d) => (d.length ? d : [{ name: "", category: "", price: 0, description: "" }]));
     } catch (e) {
       setGenError("Couldn't generate listings just now — you can add products manually below.");
-      setDraft((d) => (d.length ? d : [{ name: "", category: "", price: 0, description: "" }]));
     } finally {
       setGenLoading(false);
     }
@@ -192,7 +245,7 @@ export default function ListProductsPage({ goTo, products, setProducts, business
       </span>
       <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 28, color: theme.ink, margin: "0 0 8px" }}>List your products</h1>
       <p style={{ fontSize: 14.5, color: theme.inkSoft, marginBottom: 22, fontFamily: theme.fontBody, maxWidth: 560 }}>
-        Chat with Yuukke's AI assistant about what you sell. Paste or say bullet points for a description and the assistant will reword it into unique, customer-worthy copy — or upload a photo and it'll point out what makes this piece stand out.
+        Chat with Yuukke's AI assistant about what you sell — as you talk, listings appear below and go straight to your storefront, no extra step needed. Paste or say bullet points for a description and the assistant will reword it into unique, customer-worthy copy — or upload a photo and it'll point out what makes this piece stand out.
       </p>
 
       <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 20, marginBottom: 24 }}>
@@ -243,7 +296,7 @@ export default function ListProductsPage({ goTo, products, setProducts, business
 
       <div style={{ textAlign: "center", marginBottom: 30 }}>
         <button onClick={generateListings} disabled={genLoading} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: theme.ink, color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontWeight: 700, fontSize: 13.5, cursor: genLoading ? "default" : "pointer", opacity: genLoading ? 0.6 : 1 }}>
-          {genLoading ? <Spinner /> : <Wand2 size={15} />} Turn this conversation into listings
+          {genLoading ? <Spinner /> : <Wand2 size={15} />} {draft.length > 0 ? "Re-scan the whole conversation" : "Turn this conversation into listings"}
         </button>
         {genError && <p style={{ color: "#a32d2d", fontSize: 12.5, marginTop: 10 }}>{genError}</p>}
       </div>

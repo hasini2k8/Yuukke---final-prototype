@@ -1,14 +1,14 @@
-// Attempts to actually publish one post to its platform, using the
-// seller's stored OAuth connection (server/socialConnectionStore.js) and
-// server/socialPost.js. Called both right away (POST /api/posts, when the
-// post is due today) and by the background poller (server/scheduler.js, for
-// posts scheduled further out) — unlike Zernio, which had its own remote
-// scheduling infrastructure, publishing here only happens when this
-// function actually runs, so the future-dated case depends on the
-// scheduler ticking while the server process is up.
+// Hands a confirmed post to Zernio (server/zernioClient.js) with
+// scheduledFor set, so it fires on its own later — this is what makes
+// posting genuinely automatic instead of needing a manual click or our own
+// server to be running at that moment. Called once, right when a seller
+// confirms a draft (see server/index.js's POST /api/posts/:id/confirm) —
+// unlike the old direct-OAuth version, this doesn't need to gate on
+// "is it due today," Zernio's own infrastructure holds the post until its
+// scheduled time.
 import * as posts from "./postStore.js";
-import * as connections from "./socialConnectionStore.js";
-import { publishPost } from "./socialPost.js";
+import * as site from "./siteStore.js";
+import { uploadMedia, createPost as createZernioPost, getPostStatus } from "./zernioClient.js";
 
 function parseDataUrl(dataUrl) {
   const match = String(dataUrl || "").match(/^data:(.*?);base64,(.*)$/);
@@ -17,30 +17,39 @@ function parseDataUrl(dataUrl) {
   return { mimeType, buffer: Buffer.from(base64, "base64") };
 }
 
-function publicImageUrl(postId) {
-  const base = process.env.PUBLIC_BASE_URL || "http://localhost:5173";
-  return `${base}/api/posts/${postId}/image`;
-}
-
-export async function attemptPublish(userId, post) {
-  const connection = await connections.getConnection(userId, post.platform);
-  if (!connection) {
-    return posts.updatePost(userId, post.id, {
+export async function attemptPublish(sellerId, post) {
+  const currentSite = await site.getSite(sellerId);
+  const connection = currentSite?.connections?.[post.platform];
+  if (!connection?.connected || !connection?.accountId) {
+    return posts.updatePost(sellerId, post.id, {
       scheduleError: `${post.platform} isn't connected yet — connect it on the Storefront tab.`,
     });
   }
   try {
     const parsed = parseDataUrl(post.imageDataUrl);
-    const result = await publishPost({
-      platform: post.platform,
-      connection,
-      caption: post.caption,
-      imageUrl: publicImageUrl(post.id),
-      imageBuffer: parsed?.buffer,
-      imageMimeType: parsed?.mimeType,
+    const mediaPublicUrl = parsed ? await uploadMedia(parsed.buffer, parsed.mimeType) : null;
+    const result = await createZernioPost({
+      platform: post.platform, accountId: connection.accountId, caption: post.caption,
+      mediaPublicUrl, scheduledFor: post.scheduledFor, scheduledTime: post.scheduledTime,
     });
-    return posts.updatePost(userId, post.id, { status: "posted", externalPostId: result.externalPostId || null, scheduleError: null });
+    return posts.updatePost(sellerId, post.id, { externalPostId: result?._id || null, scheduleError: null });
   } catch (e) {
-    return posts.updatePost(userId, post.id, { status: "failed", scheduleError: e.message || "Couldn't publish that post." });
+    return posts.updatePost(sellerId, post.id, { status: "failed", scheduleError: e.message || "Couldn't schedule that post." });
+  }
+}
+
+// Best-effort refresh of what Zernio actually did with a previously-handed-
+// off post — used by the on-demand /status endpoint rather than assuming
+// success just because handoff succeeded.
+export async function refreshStatus(sellerId, post) {
+  if (!post.externalPostId) return post;
+  try {
+    const result = await getPostStatus(post.externalPostId);
+    const platformResult = result?.platformResults?.find((p) => p.platform === post.platform);
+    if (!platformResult) return post;
+    const status = platformResult.success === true ? "posted" : platformResult.success === false ? "failed" : post.status;
+    return posts.updatePost(sellerId, post.id, { status, scheduleError: platformResult.success === false ? platformResult.error : null });
+  } catch (e) {
+    return post;
   }
 }

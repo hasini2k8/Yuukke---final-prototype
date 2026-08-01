@@ -1,8 +1,8 @@
 // Talks to the AI-generated business website store (server/siteStore.js) via
-// the same /api proxy used for products. Scoped per logged-in seller — every
-// call here needs the auth token. Local dev only for now — see
+// the same /api proxy used for products. Scoped per seller's anonymous id
+// (src/lib/sellerId.js) — no login involved. Local dev only for now — see
 // server/productStore.js for the production-persistence caveat.
-import { authFetch } from "./auth";
+import { sellerFetch } from "./sellerId";
 
 async function unwrap(response) {
   const data = await response.json().catch(() => null);
@@ -13,12 +13,12 @@ async function unwrap(response) {
 }
 
 export async function fetchSite() {
-  const res = await authFetch("/api/site");
+  const res = await sellerFetch("/api/site");
   return unwrap(res);
 }
 
 export async function saveSite(patch) {
-  const res = await authFetch("/api/site", {
+  const res = await sellerFetch("/api/site", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),

@@ -1,8 +1,8 @@
 // Shared forwarding logic used by both the local dev proxy (server/index.js)
 // and the Vercel serverless function (api/openai/[...path].js), so the two
 // environments stay in sync. The OpenAI key is billable and must stay
-// server-side — never sent to the browser, unlike the VITE_-prefixed Gemini
-// key used for text generation elsewhere in this app.
+// server-side — never sent to the browser. See server/openaiText.js for the
+// text-generation equivalent.
 const OPENAI_IMAGE_MODEL = "gpt-image-1";
 
 function jsonResult(status, data) {

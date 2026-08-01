@@ -1,11 +1,12 @@
 // SQLite-backed store (server/db.js) for each seller's AI-generated business
-// website — one row per seller (was a shared singleton). See productStore.js
-// for the production-persistence caveat.
+// website — one row per seller, keyed by their anonymous id
+// (src/lib/sellerId.js), not an account. See productStore.js for the
+// production-persistence caveat.
 //
-// Social account connections live in social_connections
-// (server/socialConnectionStore.js) now, not here — this file's
-// `connections` column is unused going forward; kept only so old rows still
-// round-trip cleanly.
+// `connections` and `zernioProfileId` are the seller's Zernio-backed social
+// state (server/zernioClient.js) — Zernio itself holds the real OAuth
+// tokens; this just remembers which of its profile's connected platforms
+// belong to this seller and what their handle is.
 import crypto from "node:crypto";
 import { get, run } from "./db.js";
 
@@ -21,7 +22,7 @@ function slugify(name) {
 function toSite(row) {
   if (!row) return null;
   return {
-    userId: row.user_id,
+    sellerId: row.seller_id,
     businessName: row.business_name || "",
     tagline: row.tagline || "",
     about: row.about || "",
@@ -35,6 +36,7 @@ function toSite(row) {
     slug: row.slug || "",
     published: !!row.published,
     connections: row.connections ? JSON.parse(row.connections) : {},
+    zernioProfileId: row.zernio_profile_id || null,
     brandGuidelines: row.brand_guidelines ? JSON.parse(row.brand_guidelines) : null,
     characters: row.characters ? JSON.parse(row.characters) : [],
     createdAt: row.created_at,
@@ -42,12 +44,12 @@ function toSite(row) {
   };
 }
 
-export async function getSite(userId) {
-  return toSite(get("SELECT * FROM sites WHERE user_id = ?", [userId]));
+export async function getSite(sellerId) {
+  return toSite(get("SELECT * FROM sites WHERE seller_id = ?", [sellerId]));
 }
 
-export async function saveSite(userId, patch) {
-  const existing = toSite(get("SELECT * FROM sites WHERE user_id = ?", [userId])) || {};
+export async function saveSite(sellerId, patch) {
+  const existing = toSite(get("SELECT * FROM sites WHERE seller_id = ?", [sellerId])) || {};
   const merged = {
     ...existing,
     ...patch,
@@ -59,17 +61,18 @@ export async function saveSite(userId, patch) {
   if (!merged.createdAt) merged.createdAt = now;
 
   run(
-    `INSERT INTO sites (user_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, brand_guidelines, characters, created_at, updated_at)
-     VALUES (@user_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @brand_guidelines, @characters, @created_at, @updated_at)
-     ON CONFLICT(user_id) DO UPDATE SET
+    `INSERT INTO sites (seller_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, zernio_profile_id, brand_guidelines, characters, created_at, updated_at)
+     VALUES (@seller_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @zernio_profile_id, @brand_guidelines, @characters, @created_at, @updated_at)
+     ON CONFLICT(seller_id) DO UPDATE SET
        business_name = excluded.business_name, tagline = excluded.tagline, about = excluded.about,
        category = excluded.category, accent_color = excluded.accent_color, hero_style = excluded.hero_style,
        sections = excluded.sections, is_tech = excluded.is_tech, logo_prompt = excluded.logo_prompt,
        logo_data_url = excluded.logo_data_url, slug = excluded.slug, published = excluded.published,
-       connections = excluded.connections, brand_guidelines = excluded.brand_guidelines,
+       connections = excluded.connections, zernio_profile_id = excluded.zernio_profile_id,
+       brand_guidelines = excluded.brand_guidelines,
        characters = excluded.characters, updated_at = excluded.updated_at`,
     {
-      user_id: userId,
+      seller_id: sellerId,
       business_name: merged.businessName || null,
       tagline: merged.tagline || null,
       about: merged.about || null,
@@ -83,13 +86,14 @@ export async function saveSite(userId, patch) {
       slug: merged.slug || null,
       published: merged.published ? 1 : 0,
       connections: JSON.stringify(merged.connections || {}),
+      zernio_profile_id: merged.zernioProfileId || null,
       brand_guidelines: merged.brandGuidelines ? JSON.stringify(merged.brandGuidelines) : null,
       characters: merged.characters ? JSON.stringify(merged.characters) : null,
       created_at: merged.createdAt,
       updated_at: merged.updatedAt,
     }
   );
-  return toSite(get("SELECT * FROM sites WHERE user_id = ?", [userId]));
+  return toSite(get("SELECT * FROM sites WHERE seller_id = ?", [sellerId]));
 }
 
 export async function getSiteBySlug(slug) {

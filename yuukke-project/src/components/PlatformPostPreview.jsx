@@ -21,7 +21,7 @@ function Avatar({ logoDataUrl, businessName, size = 36, radius = "50%" }) {
   );
 }
 
-function InstagramPreview({ businessName, logoDataUrl, caption, imageDataUrl }) {
+function InstagramPreview({ businessName, logoDataUrl, caption, imageDataUrl, videoUrl }) {
   return (
     <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #dbdbdb", fontFamily: "Helvetica, Arial, sans-serif", maxWidth: 380 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}>
@@ -30,7 +30,13 @@ function InstagramPreview({ businessName, logoDataUrl, caption, imageDataUrl }) 
         <MoreHorizontal size={18} color="#262626" />
       </div>
       <div style={{ width: "100%", aspectRatio: "1", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {imageDataUrl ? <img src={imageDataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Sparkles size={28} color="#bbb" />}
+        {videoUrl ? (
+          <video src={videoUrl} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : imageDataUrl ? (
+          <img src={imageDataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <Sparkles size={28} color="#bbb" />
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 12px 4px" }}>
         <Heart size={22} color="#262626" />
@@ -48,7 +54,7 @@ function InstagramPreview({ businessName, logoDataUrl, caption, imageDataUrl }) 
   );
 }
 
-function LinkedInPreview({ businessName, logoDataUrl, caption, imageDataUrl }) {
+function LinkedInPreview({ businessName, logoDataUrl, caption, imageDataUrl, videoUrl }) {
   return (
     <div style={{ background: "#fff", borderRadius: 10, overflow: "hidden", border: "1px solid #e0e0e0", fontFamily: "Helvetica, Arial, sans-serif", maxWidth: 420 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px 8px" }}>
@@ -61,7 +67,13 @@ function LinkedInPreview({ businessName, logoDataUrl, caption, imageDataUrl }) {
       </div>
       <p style={{ fontSize: 13.5, color: "#000", margin: "0 0 10px", padding: "0 14px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{caption}</p>
       <div style={{ width: "100%", background: "#f4f2ee", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160 }}>
-        {imageDataUrl ? <img src={imageDataUrl} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover" }} /> : <Sparkles size={28} color="#aaa" />}
+        {videoUrl ? (
+          <video src={videoUrl} controls playsInline style={{ width: "100%", maxHeight: 300, objectFit: "cover" }} />
+        ) : imageDataUrl ? (
+          <img src={imageDataUrl} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover" }} />
+        ) : (
+          <Sparkles size={28} color="#aaa" />
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around", padding: "8px 6px", borderTop: "1px solid #eee" }}>
         {[[ThumbsUp, "Like"], [MessageCircle, "Comment"], [Repeat2, "Repost"], [Send, "Send"]].map(([Icon, label]) => (
@@ -74,33 +86,10 @@ function LinkedInPreview({ businessName, logoDataUrl, caption, imageDataUrl }) {
   );
 }
 
-function PinterestPreview({ businessName, logoDataUrl, caption, imageDataUrl }) {
-  return (
-    <div style={{ background: "#fff", borderRadius: 20, overflow: "hidden", border: "1px solid #e5e5e5", fontFamily: "Helvetica, Arial, sans-serif", maxWidth: 260, position: "relative" }}>
-      <div style={{ width: "100%", aspectRatio: "3/4", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-        {imageDataUrl ? <img src={imageDataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Sparkles size={28} color="#bbb" />}
-        <span style={{
-          position: "absolute", top: 12, right: 12, background: "#e60023", color: "#fff", fontSize: 13, fontWeight: 700,
-          borderRadius: 999, padding: "8px 16px",
-        }}>
-          Save
-        </span>
-      </div>
-      <div style={{ padding: "12px 14px" }}>
-        <p style={{ fontSize: 13, color: "#111", margin: "0 0 10px", lineHeight: 1.5 }}>{caption}</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Avatar logoDataUrl={logoDataUrl} businessName={businessName} size={24} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#333" }}>{businessName || "Your Business"}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+const VARIANTS = { instagram: InstagramPreview, linkedin: LinkedInPreview };
 
-const VARIANTS = { instagram: InstagramPreview, linkedin: LinkedInPreview, pinterest: PinterestPreview };
-
-export default function PlatformPostPreview({ platform, businessName, logoDataUrl, caption, imageDataUrl }) {
+export default function PlatformPostPreview({ platform, businessName, logoDataUrl, caption, imageDataUrl, videoUrl }) {
   const Variant = VARIANTS[platform];
   if (!Variant) return null;
-  return <Variant businessName={businessName} logoDataUrl={logoDataUrl} caption={caption} imageDataUrl={imageDataUrl} />;
+  return <Variant businessName={businessName} logoDataUrl={logoDataUrl} caption={caption} imageDataUrl={imageDataUrl} videoUrl={videoUrl} />;
 }

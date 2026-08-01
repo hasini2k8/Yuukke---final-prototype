@@ -1,23 +1,41 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ArrowLeft, Wand2, BookOpen, Smile, Trash2, ArrowRight } from "lucide-react";
 import { theme } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import { Spinner } from "../components/Shared";
 import MicButton from "../components/MicButton";
 import SpeakButton from "../components/SpeakButton";
-import { askGeminiJSON, generateImage, buildCharacterPrompt, BRAND_GUIDELINES_SYSTEM_PROMPT } from "../lib/ai";
+import TalkAnalyseExecuteBar from "../components/TalkAnalyseExecuteBar";
+import { useTalkAnalyseExecute } from "../hooks/useTalkAnalyseExecute";
+import { generateImage, buildCharacterPrompt, buildEditContext, BRAND_GUIDELINES_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite, saveSite } from "../lib/site";
 import { EN_STRINGS } from "../lib/strings";
 
 export default function BrandWorkbenchPage({ goTo, speechLang }) {
   const [site, setSite] = useState(null);
   const [guidelines, setGuidelines] = useState(null);
-  const [guidelinesLoading, setGuidelinesLoading] = useState(false);
-  const [guidelinesError, setGuidelinesError] = useState("");
   const [characters, setCharacters] = useState([]);
   const [characterPrompt, setCharacterPrompt] = useState("");
   const [characterLoading, setCharacterLoading] = useState(false);
   const [characterError, setCharacterError] = useState("");
+  const autoRan = useRef(false);
+
+  const guidelinesContext = (instruction) => buildEditContext({
+    base: `Business name: ${site?.businessName || ""}\nTagline: ${site?.tagline || ""}\nAbout: ${site?.about || ""}\nCategory: ${site?.category || ""}\nAccent color: ${site?.accentColor || ""}`,
+    current: guidelines,
+    instruction,
+  });
+
+  async function applyGuidelines(result) {
+    setGuidelines(result);
+    await saveSite({ brandGuidelines: result });
+  }
+
+  const guidelinesEdit = useTalkAnalyseExecute({
+    system: BRAND_GUIDELINES_SYSTEM_PROMPT,
+    buildContext: guidelinesContext,
+    onExecute: applyGuidelines,
+  });
 
   useEffect(() => {
     fetchSite().then((s) => {
@@ -27,20 +45,14 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
     }).catch(() => {});
   }, []);
 
-  async function generateGuidelines() {
-    setGuidelinesLoading(true);
-    setGuidelinesError("");
-    try {
-      const context = `Business name: ${site?.businessName || ""}\nTagline: ${site?.tagline || ""}\nAbout: ${site?.about || ""}\nCategory: ${site?.category || ""}\nAccent color: ${site?.accentColor || ""}`;
-      const result = await askGeminiJSON(BRAND_GUIDELINES_SYSTEM_PROMPT, context);
-      setGuidelines(result);
-      await saveSite({ brandGuidelines: result });
-    } catch (e) {
-      setGuidelinesError(e.message || "Couldn't generate brand guidelines just now.");
-    } finally {
-      setGuidelinesLoading(false);
-    }
-  }
+  // Talk, analyse, execute — a default set of guidelines appears the moment
+  // a business identity exists, with no click required; the talk/type bar
+  // below is then how the seller refines it.
+  useEffect(() => {
+    if (autoRan.current || !site?.businessName || guidelines) return;
+    autoRan.current = true;
+    guidelinesEdit.run("");
+  }, [site, guidelines]);
 
   async function generateCharacter() {
     setCharacterLoading(true);
@@ -100,16 +112,33 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
                 <p style={{ fontSize: 13.5, fontWeight: 700, color: theme.ink, margin: 0 }}>Brand guidelines</p>
               </div>
               <p style={{ fontSize: 12, color: theme.inkSoft, marginBottom: 16, lineHeight: 1.5 }}>
-                A quick reference for colors, fonts, and voice — so everything you post looks and sounds like the same business.
+                A quick reference for colors, fonts, and voice — so everything you post looks and sounds like the same business. A default appears automatically; tell it what to change, by voice or typing.
               </p>
 
-              {guidelinesError && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 12 }}>{guidelinesError}</p>}
-              <button onClick={generateGuidelines} disabled={guidelinesLoading} style={{
-                display: "flex", alignItems: "center", gap: 8, background: theme.ink, color: "#fff", border: "none",
-                borderRadius: 12, padding: "11px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: guidelines ? 20 : 0,
-              }}>
-                {guidelinesLoading ? <Spinner /> : <Wand2 size={14} />} {guidelinesLoading ? "Designing…" : guidelines ? "Regenerate guidelines" : "Generate brand guidelines"}
-              </button>
+              {!guidelines && guidelinesEdit.busy ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: theme.inkSoft, fontSize: 13, marginBottom: 4 }}>
+                  <Spinner size={14} /> Designing your starting guidelines…
+                </div>
+              ) : (
+                <div style={{ marginBottom: guidelines ? 20 : 0 }}>
+                  <TalkAnalyseExecuteBar
+                    placeholder="e.g. make the tone more playful, add a warmer color to the palette"
+                    busy={guidelinesEdit.busy}
+                    error={guidelinesEdit.error}
+                    onSubmit={guidelinesEdit.run}
+                    speechLang={speechLang}
+                    busyLabel="Updating…"
+                    idleLabel={guidelines ? "Update guidelines" : "Generate guidelines"}
+                  />
+                  {guidelines && (
+                    <button onClick={() => { setGuidelines(null); autoRan.current = false; }} style={{
+                      background: "none", border: "none", color: theme.inkSoft, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "8px 0 0",
+                    }}>
+                      Start over from a fresh default
+                    </button>
+                  )}
+                </div>
+              )}
 
               {guidelines && (
                 <div>

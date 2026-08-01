@@ -57,8 +57,8 @@ export function UniquenessCard({ msg, onConfirm, onDecline, onRetry, speechLang 
 
 // Shown after a seller uploads a product photo in the listing chatbot — a
 // vision-based read of the photo itself (materials, craftsmanship, motifs),
-// not a live web comparison against other companies (Gemini's search
-// grounding needs a billed API key; see checkUniqueness in lib/ai.js).
+// not a live web comparison against other companies (there's no live web
+// search wired up here; see checkUniqueness in lib/ai.js).
 export function PhotoInsightCard({ msg, onSave, onDismiss, speechLang }) {
   return (
     <div style={{ background: theme.white, border: `1.5px solid ${theme.wineTint}`, borderRadius: 16, padding: 18, marginBottom: 14, animation: "cardIn .3s ease" }}>

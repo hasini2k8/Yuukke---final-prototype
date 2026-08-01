@@ -4,7 +4,7 @@ import { theme } from "../theme";
 import { Spinner } from "./Shared";
 import MicButton from "./MicButton";
 import SpeakButton from "./SpeakButton";
-import { askGeminiChat } from "../lib/ai";
+import { askOpenAIChat } from "../lib/ai";
 
 const PAGE_NAMES = {
   dashboard: "the dashboard overview",
@@ -36,7 +36,7 @@ export default function AskYuukke({ pageId, businessName, speechLang }) {
     setInput("");
     setLoading(true);
     try {
-      const reply = await askGeminiChat(buildSystemPrompt(pageId, businessName), next);
+      const reply = await askOpenAIChat(buildSystemPrompt(pageId, businessName), next);
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", content: e.message || "Sorry, I couldn't answer that just now — please try again." }]);

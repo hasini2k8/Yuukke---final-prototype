@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
-  seller_id TEXT REFERENCES users(id),
+  seller_id TEXT,
   name TEXT NOT NULL,
   description TEXT,
   category TEXT,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 
 CREATE TABLE IF NOT EXISTS sites (
-  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  seller_id TEXT PRIMARY KEY,
   business_name TEXT,
   tagline TEXT,
   about TEXT,
@@ -99,53 +99,43 @@ CREATE TABLE IF NOT EXISTS sites (
 
 CREATE TABLE IF NOT EXISTS posts (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
+  seller_id TEXT NOT NULL,
   platform TEXT NOT NULL,
+  topic TEXT,
   caption TEXT,
   image_data_url TEXT,
   scheduled_for TEXT,
+  scheduled_time TEXT,
   status TEXT NOT NULL,
   external_post_id TEXT,
   schedule_error TEXT,
   created_at TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS business_profiles (
-  user_id TEXT PRIMARY KEY REFERENCES users(id),
-  sells_what TEXT,
-  category TEXT,
-  target_customers TEXT,
-  price_range TEXT,
-  style_mood TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- Real OAuth tokens for the seller's own Instagram/LinkedIn/Pinterest
--- accounts (server/socialAuth.js) — replaces the old Zernio-hosted
--- connection. Never sent to the frontend; only {connected, username} is.
-CREATE TABLE IF NOT EXISTS social_connections (
-  user_id TEXT NOT NULL REFERENCES users(id),
-  platform TEXT NOT NULL,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT,
-  expires_at TEXT,
-  account_id TEXT,
-  username TEXT,
-  connected_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, platform)
-);
-
--- Short-lived, single-use tokens that carry the logged-in seller's identity
--- across the OAuth redirect round trip (the callback is a plain browser GET
--- with no Authorization header available).
-CREATE TABLE IF NOT EXISTS oauth_states (
-  state TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  platform TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
 `);
+
+// Instagram/LinkedIn OAuth now goes through Zernio (server/zernioClient.js)
+// — it holds the real tokens on its side, keyed by its own opaque
+// zernio_profile_id (a new column on sites, added below) and a
+// per-platform record in sites.connections. The old direct-OAuth token
+// tables are no longer needed.
+db.exec("DROP TABLE IF EXISTS social_connections;");
+db.exec("DROP TABLE IF EXISTS oauth_states;");
+
+// `CREATE TABLE IF NOT EXISTS` above doesn't retrofit columns onto a table
+// that already exists from before this column was added — these do that,
+// each one a no-op once already applied (SQLite errors adding a column
+// that's already there, which this just swallows).
+function addColumnIfMissing(table, column, definition) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  } catch (e) {
+    if (!/duplicate column name/i.test(e.message)) throw e;
+  }
+}
+addColumnIfMissing("posts", "topic", "TEXT");
+addColumnIfMissing("posts", "scheduled_time", "TEXT");
+addColumnIfMissing("posts", "video_url", "TEXT");
+addColumnIfMissing("sites", "zernio_profile_id", "TEXT");
 
 // Prepared-statement params can be positional (an array, for "?" placeholders)
 // or named (a plain object, for "@name" placeholders) — node:sqlite's
