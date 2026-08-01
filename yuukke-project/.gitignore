@@ -3,3 +3,4 @@ dist/
 .env
 .DS_Store
 server/data/
+.claude/settings.local.json

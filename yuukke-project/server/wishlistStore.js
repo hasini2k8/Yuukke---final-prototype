@@ -1,36 +1,22 @@
-import { createStore } from "./jsonStore.js";
+import { all, run } from "./db.js";
 import { getProduct } from "./productStore.js";
 
-const store = createStore("wishlists.json", []);
-
-async function getDoc(userId) {
-  const lists = await store.readAll();
-  let doc = lists.find((l) => l.userId === userId);
-  if (!doc) {
-    doc = { userId, productIds: [] };
-    lists.push(doc);
-    await store.writeAll(lists);
-  }
-  return { lists, doc };
-}
-
 export async function getWishlist(userId) {
-  const { doc } = await getDoc(userId);
+  const rows = all("SELECT product_id FROM wishlist_items WHERE user_id = ?", [userId]);
   const products = [];
-  for (const id of doc.productIds) {
-    const p = await getProduct(id);
+  for (const row of rows) {
+    const p = await getProduct(row.product_id);
     if (p) products.push(p);
   }
   return products;
 }
 
 export async function toggleWishlist(userId, productId) {
-  const { lists, doc } = await getDoc(userId);
-  if (doc.productIds.includes(productId)) {
-    doc.productIds = doc.productIds.filter((id) => id !== productId);
+  const existing = all("SELECT 1 FROM wishlist_items WHERE user_id = ? AND product_id = ?", [userId, productId])[0];
+  if (existing) {
+    run("DELETE FROM wishlist_items WHERE user_id = ? AND product_id = ?", [userId, productId]);
   } else {
-    doc.productIds.push(productId);
+    run("INSERT INTO wishlist_items (user_id, product_id) VALUES (?, ?)", [userId, productId]);
   }
-  await store.writeAll(lists);
   return getWishlist(userId);
 }

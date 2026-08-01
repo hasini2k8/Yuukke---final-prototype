@@ -1,10 +1,10 @@
-// Local file-based product store for dev/demo use — extends the local proxy
+// Product catalog backed by SQLite (server/db.js) — extends the local proxy
 // server (server/index.js) so shopkeeper listings persist across sessions
 // without needing a hosted database. Production on Vercel needs a real
-// database (serverless functions don't have durable local disk) — this only
-// runs under `npm run dev`.
+// hosted database (serverless functions don't have durable local disk) —
+// this only runs under `npm run dev`.
 import crypto from "node:crypto";
-import { createStore } from "./jsonStore.js";
+import { get, all, run } from "./db.js";
 
 const SEED_PRODUCTS = [
   {
@@ -33,21 +33,53 @@ const SEED_PRODUCTS = [
   },
 ];
 
-const store = createStore("products.json", SEED_PRODUCTS);
+function ensureSeed() {
+  const { count } = get("SELECT COUNT(*) as count FROM products");
+  if (count > 0) return;
+  for (const p of SEED_PRODUCTS) {
+    run(
+      `INSERT INTO products (id, seller_id, name, description, category, price, dimensions, model_url, preview_color, image_preview, in_stock, created_at)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+      [p.id, p.name, p.description, p.category, p.price, JSON.stringify(p.dimensions), p.modelUrl, p.previewColor, p.imagePreview, p.createdAt]
+    );
+  }
+}
+ensureSeed();
+
+function toProduct(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    sellerId: row.seller_id || null,
+    name: row.name,
+    description: row.description || "",
+    category: row.category || "",
+    price: row.price,
+    dimensions: row.dimensions ? JSON.parse(row.dimensions) : null,
+    modelUrl: row.model_url || null,
+    previewColor: row.preview_color || null,
+    imagePreview: row.image_preview || null,
+    inStock: !!row.in_stock,
+    createdAt: row.created_at,
+  };
+}
 
 export async function listProducts() {
-  return store.readAll();
+  return all("SELECT * FROM products ORDER BY created_at DESC").map(toProduct);
+}
+
+export async function listProductsBySeller(sellerId) {
+  return all("SELECT * FROM products WHERE seller_id = ? ORDER BY created_at DESC", [sellerId]).map(toProduct);
 }
 
 export async function getProduct(id) {
-  const products = await store.readAll();
-  return products.find((p) => p.id === id) || null;
+  return toProduct(get("SELECT * FROM products WHERE id = ?", [id]));
 }
 
-export async function createProduct(data) {
-  const products = await store.readAll();
+export async function createProduct(data, sellerId = null) {
   const product = {
     id: crypto.randomUUID(),
+    sellerId,
     name: String(data.name || "").trim(),
     description: String(data.description || "").trim(),
     category: String(data.category || "").trim(),
@@ -59,7 +91,14 @@ export async function createProduct(data) {
     inStock: data.inStock !== false,
     createdAt: new Date().toISOString(),
   };
-  products.push(product);
-  await store.writeAll(products);
+  run(
+    `INSERT INTO products (id, seller_id, name, description, category, price, dimensions, model_url, preview_color, image_preview, in_stock, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      product.id, product.sellerId, product.name, product.description, product.category, product.price,
+      product.dimensions ? JSON.stringify(product.dimensions) : null, product.modelUrl, product.previewColor,
+      product.imagePreview, product.inStock ? 1 : 0, product.createdAt,
+    ]
+  );
   return product;
 }

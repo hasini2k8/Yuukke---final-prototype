@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Wand2, Plus, Trash2, Mic, MicOff, Send, Ruler, RotateCcw } from "lucide-react";
+import { ArrowLeft, Wand2, Plus, Trash2, Mic, MicOff, Send, Ruler, RotateCcw, ImagePlus } from "lucide-react";
 import { theme } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import { Spinner } from "../components/Shared";
-import { ChatBubble, UniquenessCard } from "../components/ChatMessages";
+import { ChatBubble, UniquenessCard, PhotoInsightCard } from "../components/ChatMessages";
 import ProductDetailCard from "../components/ProductDetailCard";
 import SplatViewer from "../components/SplatViewer";
-import { askClaudeJSON, askGeminiChat, checkUniqueness, PRODUCT_LISTING_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT } from "../lib/ai";
+import { askGeminiJSON, askGeminiChat, askGeminiVision, checkUniqueness, buildSurveyContext, PRODUCT_LISTING_SYSTEM_PROMPT, PRODUCT_UNIQUENESS_VISION_PROMPT, CHAT_SYSTEM_PROMPT } from "../lib/ai";
 import { saveProduct } from "../lib/products";
 import { useVoiceInput } from "../lib/speech";
 import { EN_STRINGS } from "../lib/strings";
@@ -19,7 +19,7 @@ function miniInput(bold) {
   };
 }
 
-export default function ListProductsPage({ goTo, products, setProducts, speechLang }) {
+export default function ListProductsPage({ goTo, products, setProducts, businessProfile, speechLang }) {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi! Tell me a bit about what you make or sell — you can type, or tap the mic and speak." },
   ]);
@@ -34,6 +34,7 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const scrollRef = useRef(null);
+  const imageInputRef = useRef(null);
   const { listening, toggle, supported } = useVoiceInput(speechLang, (t) => setInput((prev) => (prev ? prev + " " + t : t)));
 
   useEffect(() => {
@@ -65,7 +66,8 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
     } else {
       setChatLoading(true);
       try {
-        const reply = await askGeminiChat(CHAT_SYSTEM_PROMPT, nextMessages);
+        const chatSystemPrompt = businessProfile ? `${CHAT_SYSTEM_PROMPT}\n\n${buildSurveyContext(businessProfile)}Use that context instead of asking them to repeat it.` : CHAT_SYSTEM_PROMPT;
+        const reply = await askGeminiChat(chatSystemPrompt, nextMessages);
         setMessages((m) => [...m, { role: "assistant", content: reply }]);
       } catch (e) {
         setMessages((m) => [...m, { role: "assistant", content: "Sorry, I had trouble responding just now — could you try again?" }]);
@@ -73,6 +75,41 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
         setChatLoading(false);
       }
     }
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const id = crypto.randomUUID();
+      setMessages((m) => [...m, { id, role: "photo-insight", image: dataUrl, text: "", status: "analyzing" }]);
+      analyzePhoto(id, dataUrl);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzePhoto(id, dataUrl) {
+    try {
+      const text = await askGeminiVision(
+        PRODUCT_UNIQUENESS_VISION_PROMPT,
+        "What makes this product stand out from a generic version of the same kind of item?",
+        dataUrl
+      );
+      setMessages((m) => m.map((msg) => (msg.id === id ? { ...msg, text, status: "pending" } : msg)));
+    } catch (e) {
+      setMessages((m) => m.map((msg) => (msg.id === id ? { ...msg, text: e.message || "I couldn't take a look at that photo just now — feel free to try another.", status: "error" } : msg)));
+    }
+  }
+
+  function saveInsight(id, text) {
+    setSavedDescriptions((d) => [...d, text]);
+    setMessages((m) => m.map((msg) => (msg.id === id ? { ...msg, status: "saved" } : msg)));
+  }
+  function dismissInsight(id) {
+    setMessages((m) => m.map((msg) => (msg.id === id ? { ...msg, status: "dismissed" } : msg)));
   }
 
   function updateCheckMsg(i, status) {
@@ -96,9 +133,10 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
     setGenError("");
     try {
       const summary =
+        buildSurveyContext(businessProfile) +
         messages.filter((m) => m.role === "user").map((m) => m.content).join("\n") +
         "\n\nConfirmed descriptions:\n" + savedDescriptions.join("\n");
-      const result = await askClaudeJSON(PRODUCT_LISTING_SYSTEM_PROMPT, summary);
+      const result = await askGeminiJSON(PRODUCT_LISTING_SYSTEM_PROMPT, summary);
       setDraft(Array.isArray(result) ? result : []);
     } catch (e) {
       setGenError("Couldn't generate listings just now — you can add products manually below.");
@@ -128,12 +166,16 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
     setOpenDetailIndex(null);
   }
   async function save() {
-    const valid = draft.filter((p) => p.name.trim());
+    // Draft items carried over from already-saved products (via the
+    // `products` prop) already have a server `id` — only POST genuinely new
+    // ones (from AI generation or "Add manually") so re-saving doesn't
+    // create duplicate listings.
+    const toCreate = draft.filter((p) => p.name.trim() && !p.id);
     setSaving(true);
     setSaveError("");
     try {
-      await Promise.all(valid.map((p) => saveProduct(p)));
-      setProducts(valid);
+      const created = await Promise.all(toCreate.map((p) => saveProduct(p)));
+      setProducts((prev) => [...prev, ...created]);
       goTo("dashboard");
     } catch (e) {
       setSaveError("Couldn't publish these to the marketplace catalog just now — you can try again.");
@@ -149,7 +191,7 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
       </span>
       <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 28, color: theme.ink, margin: "0 0 8px" }}>List your products</h1>
       <p style={{ fontSize: 14.5, color: theme.inkSoft, marginBottom: 22, fontFamily: theme.fontBody, maxWidth: 560 }}>
-        Chat with Yuukke's AI assistant about what you sell. Paste or say bullet points for a description and the assistant will check the web for similar listings before rewording it into unique, customer-worthy copy.
+        Chat with Yuukke's AI assistant about what you sell. Paste or say bullet points for a description and the assistant will reword it into unique, customer-worthy copy — or upload a photo and it'll point out what makes this piece stand out.
       </p>
 
       <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 20, marginBottom: 24 }}>
@@ -157,17 +199,31 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
           {messages.map((msg, i) =>
             msg.role === "unique-check" ? (
               <UniquenessCard key={i} msg={msg} speechLang={speechLang} onConfirm={() => confirmCheck(i, msg)} onDecline={() => declineCheck(i)} onRetry={() => retryCheck(i, msg)} />
+            ) : msg.role === "photo-insight" ? (
+              <PhotoInsightCard key={msg.id} msg={msg} speechLang={speechLang} onSave={() => saveInsight(msg.id, msg.text)} onDismiss={() => dismissInsight(msg.id)} />
             ) : (
               <ChatBubble key={i} msg={msg} speechLang={speechLang} />
             )
           )}
           {(chatLoading || checkLoading) && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, color: theme.inkSoft, fontSize: 12.5, marginTop: 6 }}>
-              <Spinner size={13} color={theme.wine} /> {checkLoading ? "Searching the web for similar descriptions…" : "Thinking…"}
+              <Spinner size={13} color={theme.wine} /> {checkLoading ? "Rewriting your description…" : "Thinking…"}
             </div>
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageUpload} style={{ display: "none" }} />
+          <button
+            aria-label="Upload a product photo for unique selling points"
+            onClick={() => imageInputRef.current?.click()}
+            style={{
+              width: 42, height: 42, borderRadius: "50%", border: "none", flexShrink: 0, cursor: "pointer",
+              background: theme.creamDark, color: theme.inkSoft,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <ImagePlus size={18} />
+          </button>
           <button
             aria-label={listening ? "Stop voice input" : "Speak instead of typing"}
             onClick={toggle}

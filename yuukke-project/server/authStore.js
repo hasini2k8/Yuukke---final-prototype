@@ -1,27 +1,30 @@
-// Local file-based auth — real signup/login with hashed passwords (Node's
-// built-in scrypt, no extra dependency) and token-based sessions. Local dev
-// only, same persistence caveat as every other store in this project.
+// Real signup/login backed by SQLite (server/db.js) — hashed passwords
+// (Node's built-in scrypt, no extra dependency) and token-based sessions.
+// Local dev only, same persistence caveat as every other store in this
+// project (see productStore.js).
 import crypto from "node:crypto";
-import { createStore } from "./jsonStore.js";
-
-const usersStore = createStore("users.json", []);
-const sessionsStore = createStore("sessions.json", []);
+import { get, run } from "./db.js";
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
 }
 
-function toPublicUser(user) {
-  const { passwordHash, passwordSalt, ...pub } = user;
-  return pub;
+function toPublicUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    businessName: row.business_name || "",
+    createdAt: row.created_at,
+  };
 }
 
-async function createSession(user) {
-  const sessions = await sessionsStore.readAll();
+function createSession(row) {
   const token = crypto.randomBytes(32).toString("hex");
-  sessions.push({ token, userId: user.id, createdAt: new Date().toISOString() });
-  await sessionsStore.writeAll(sessions);
-  return { token, user: toPublicUser(user) };
+  run("INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)", [
+    token, row.id, new Date().toISOString(),
+  ]);
+  return { token, user: toPublicUser(row) };
 }
 
 export async function signup({ email, password, businessName }) {
@@ -29,46 +32,42 @@ export async function signup({ email, password, businessName }) {
   if (!normalizedEmail || !password) throw new Error("Email and password are required.");
   if (password.length < 6) throw new Error("Password must be at least 6 characters.");
 
-  const users = await usersStore.readAll();
-  if (users.some((u) => u.email === normalizedEmail)) {
-    throw new Error("An account with that email already exists.");
-  }
+  const existing = get("SELECT id FROM users WHERE email = ?", [normalizedEmail]);
+  if (existing) throw new Error("An account with that email already exists.");
 
   const salt = crypto.randomBytes(16).toString("hex");
-  const user = {
+  const row = {
     id: crypto.randomUUID(),
     email: normalizedEmail,
-    passwordHash: hashPassword(password, salt),
-    passwordSalt: salt,
-    businessName: businessName || "",
-    createdAt: new Date().toISOString(),
+    password_hash: hashPassword(password, salt),
+    password_salt: salt,
+    business_name: businessName || "",
+    created_at: new Date().toISOString(),
   };
-  users.push(user);
-  await usersStore.writeAll(users);
-  return createSession(user);
+  run(
+    "INSERT INTO users (id, email, password_hash, password_salt, business_name, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    [row.id, row.email, row.password_hash, row.password_salt, row.business_name, row.created_at]
+  );
+  return createSession(row);
 }
 
 export async function login({ email, password }) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
-  const users = await usersStore.readAll();
-  const user = users.find((u) => u.email === normalizedEmail);
-  if (!user || hashPassword(password || "", user.passwordSalt) !== user.passwordHash) {
+  const row = get("SELECT * FROM users WHERE email = ?", [normalizedEmail]);
+  if (!row || hashPassword(password || "", row.password_salt) !== row.password_hash) {
     throw new Error("Incorrect email or password.");
   }
-  return createSession(user);
+  return createSession(row);
 }
 
 export async function logout(token) {
-  const sessions = await sessionsStore.readAll();
-  await sessionsStore.writeAll(sessions.filter((s) => s.token !== token));
+  run("DELETE FROM sessions WHERE token = ?", [token]);
 }
 
 export async function getUserByToken(token) {
   if (!token) return null;
-  const sessions = await sessionsStore.readAll();
-  const session = sessions.find((s) => s.token === token);
+  const session = get("SELECT * FROM sessions WHERE token = ?", [token]);
   if (!session) return null;
-  const users = await usersStore.readAll();
-  const user = users.find((u) => u.id === session.userId);
-  return user ? toPublicUser(user) : null;
+  const row = get("SELECT * FROM users WHERE id = ?", [session.user_id]);
+  return toPublicUser(row);
 }
