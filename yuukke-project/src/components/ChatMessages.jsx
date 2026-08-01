@@ -2,6 +2,7 @@ import React from "react";
 import { Bot, Volume2, Sparkles, ThumbsUp, ThumbsDown, RotateCcw } from "lucide-react";
 import { theme } from "../theme";
 import { speak } from "../lib/speech";
+import { Spinner } from "./Shared";
 
 export function ChatBubble({ msg, speechLang }) {
   if (msg.role === "user") {
@@ -50,6 +51,48 @@ export function UniquenessCard({ msg, onConfirm, onDecline, onRetry, speechLang 
           {msg.status === "confirmed" ? "✓ Saved to your listing" : "Discarded — describe it differently above"}
         </span>
       )}
+    </div>
+  );
+}
+
+// Shown after a seller uploads a product photo in the listing chatbot — a
+// vision-based read of the photo itself (materials, craftsmanship, motifs),
+// not a live web comparison against other companies (Gemini's search
+// grounding needs a billed API key; see checkUniqueness in lib/ai.js).
+export function PhotoInsightCard({ msg, onSave, onDismiss, speechLang }) {
+  return (
+    <div style={{ background: theme.white, border: `1.5px solid ${theme.wineTint}`, borderRadius: 16, padding: 18, marginBottom: 14, animation: "cardIn .3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Sparkles size={15} color={theme.wine} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: theme.wine, letterSpacing: 0.5 }}>WHAT MAKES THIS YOURS</span>
+      </div>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <img src={msg.image} alt="Uploaded product" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, border: `1px solid ${theme.line}`, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {msg.status === "analyzing" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: theme.inkSoft }}>
+              <Spinner size={13} color={theme.wine} /> Taking a look at your photo…
+            </div>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: theme.ink, margin: "0 0 8px", lineHeight: 1.55, fontFamily: theme.fontBody }}>{msg.text}</p>
+              {msg.status !== "error" && (
+                <button aria-label="Read this aloud" onClick={() => speak(msg.text, speechLang)} style={{ background: "none", border: "none", cursor: "pointer", color: theme.wine, padding: 0, marginBottom: 8, display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700 }}>
+                  <Volume2 size={12} /> Listen
+                </button>
+              )}
+              {msg.status === "pending" && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button onClick={onSave} style={{ display: "flex", alignItems: "center", gap: 6, background: theme.wine, color: "#fff", border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ThumbsUp size={12} /> Add to listing notes</button>
+                  <button onClick={onDismiss} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", color: theme.inkSoft, border: `1.5px solid ${theme.line}`, borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ThumbsDown size={12} /> Dismiss</button>
+                </div>
+              )}
+              {msg.status === "saved" && <span style={{ fontSize: 12, fontWeight: 700, color: "#2c6e49" }}>✓ Added to your listing notes</span>}
+              {msg.status === "dismissed" && <span style={{ fontSize: 12, fontWeight: 700, color: theme.inkSoft }}>Dismissed</span>}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

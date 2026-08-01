@@ -4,7 +4,6 @@ import { theme } from "../theme";
 import { Logo } from "../components/Shared";
 import LoginModal from "../components/LoginModal";
 import { useAuth } from "../components/AuthContext";
-import { usePageTranslation } from "../components/I18nContext";
 
 const WAYS = [
   { icon: GraduationCap, title: "Teach", desc: "Share the skills builders need — pricing, photography, packaging, digital basics." },
@@ -12,15 +11,7 @@ const WAYS = [
   { icon: Sparkles, title: "Champion", desc: "Open doors — introductions, referrals, and visibility for the builders you back." },
 ];
 
-const STRINGS = [
-  "Explore Marketplace", "BECOME A MENTOR", "Be part of a small army rooting for builders.",
-  "When a woman entrepreneur realizes there's a community of experts backing her, she becomes unstoppable. Mentors bring the skills, connections, and encouragement that no course can replace.",
-  "Apply to become a mentor", "Thanks for your interest,", "! Our team will be in touch.",
-  ...WAYS.flatMap((w) => [w.title, w.desc]),
-];
-
 export default function BecomeMentorPage() {
-  const t = usePageTranslation(STRINGS);
   const { user } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
 
@@ -28,16 +19,16 @@ export default function BecomeMentorPage() {
     <div style={{ background: theme.cream, minHeight: "100vh" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 40px", borderBottom: `1px solid ${theme.line}`, background: theme.white }}>
         <a href="/"><Logo size={26} /></a>
-        <a href="/marketplace" style={{ fontSize: 13.5, fontWeight: 600, color: theme.wine, textDecoration: "none" }}>{t("Explore Marketplace")}</a>
+        <a href="/marketplace" style={{ fontSize: 13.5, fontWeight: 600, color: theme.wine, textDecoration: "none" }}>Explore Marketplace</a>
       </div>
 
       <div style={{ maxWidth: 700, margin: "0 auto", padding: "60px 24px 80px", textAlign: "center" }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: theme.wine, letterSpacing: 1.5, marginBottom: 10 }}>{t("BECOME A MENTOR")}</p>
+        <p style={{ fontSize: 12, fontWeight: 700, color: theme.wine, letterSpacing: 1.5, marginBottom: 10 }}>BECOME A MENTOR</p>
         <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 32, color: theme.ink, margin: "0 0 16px" }}>
-          {t("Be part of a small army rooting for builders.")}
+          Be part of a small army rooting for builders.
         </h1>
         <p style={{ fontSize: 14.5, color: theme.inkSoft, lineHeight: 1.7, marginBottom: 40, maxWidth: 520, marginLeft: "auto", marginRight: "auto" }}>
-          {t("When a woman entrepreneur realizes there's a community of experts backing her, she becomes unstoppable. Mentors bring the skills, connections, and encouragement that no course can replace.")}
+          When a woman entrepreneur realizes there's a community of experts backing her, she becomes unstoppable. Mentors bring the skills, connections, and encouragement that no course can replace.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 18, marginBottom: 40, textAlign: "left" }}>
@@ -48,21 +39,21 @@ export default function BecomeMentorPage() {
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: theme.wineTint, color: theme.wine, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                   <Icon size={17} />
                 </div>
-                <p style={{ fontFamily: theme.fontDisplay, fontSize: 15, color: theme.ink, margin: "0 0 6px" }}>{t(w.title)}</p>
-                <p style={{ fontSize: 12.5, color: theme.inkSoft, margin: 0, lineHeight: 1.6 }}>{t(w.desc)}</p>
+                <p style={{ fontFamily: theme.fontDisplay, fontSize: 15, color: theme.ink, margin: "0 0 6px" }}>{w.title}</p>
+                <p style={{ fontSize: 12.5, color: theme.inkSoft, margin: 0, lineHeight: 1.6 }}>{w.desc}</p>
               </div>
             );
           })}
         </div>
 
         {user ? (
-          <p style={{ fontSize: 14, color: theme.ink, fontWeight: 600 }}>{t("Thanks for your interest,")} {user.businessName || user.email}{t("! Our team will be in touch.")}</p>
+          <p style={{ fontSize: 14, color: theme.ink, fontWeight: 600 }}>Thanks for your interest, {user.businessName || user.email}! Our team will be in touch.</p>
         ) : (
           <button onClick={() => setShowLogin(true)} style={{
             display: "inline-flex", alignItems: "center", gap: 8, background: theme.wine, color: "#fff", border: "none",
             borderRadius: 12, padding: "13px 26px", fontWeight: 700, fontSize: 14, cursor: "pointer",
           }}>
-            {t("Apply to become a mentor")} <ArrowRight size={14} />
+            Apply to become a mentor <ArrowRight size={14} />
           </button>
         )}
       </div>

@@ -11,6 +11,21 @@ async function unwrap(response) {
   return data.data;
 }
 
+// A stalled connection (dropped wifi, a proxy that never responds) leaves a
+// plain fetch() awaiting forever — since pollTask's overall timeout is only
+// checked *between* polls, one hung request can freeze the whole loop with
+// no way out. This caps each individual poll so a stall becomes a normal,
+// retryable error instead of an infinite spinner.
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function uploadImage(file) {
   const form = new FormData();
   form.append("file", file);
@@ -36,7 +51,7 @@ async function pollTask(taskId, onProgress, { intervalMs = 4000, timeoutMs = 6 *
   while (Date.now() - start < timeoutMs) {
     let task;
     try {
-      const res = await fetch(`${TRIPO_BASE}/tasks/${taskId}`);
+      const res = await fetchWithTimeout(`${TRIPO_BASE}/tasks/${taskId}`, {}, 20000);
       task = await unwrap(res);
     } catch (e) {
       // A single flaky request shouldn't kill a ~4-minute generation — retry
@@ -61,8 +76,14 @@ async function pollTask(taskId, onProgress, { intervalMs = 4000, timeoutMs = 6 *
 // Uploads a product photo to Tripo3D and generates a rotatable Gaussian Splat
 // (a point-based real-time 3D representation, not a textured mesh) from it.
 // Returns { model_url, rendered_image_url } once the async task completes.
+//
+// model_url points at our own /api/tripo/model/:taskId proxy rather than
+// Tripo's raw CDN link — Tripo enforces CORS on those links (a browser can't
+// fetch them cross-origin) and they expire after ~5 minutes, so the proxy
+// re-resolves a fresh one from the task on every request instead.
 export async function generateSplatFromImage(file, onProgress) {
   const fileToken = await uploadImage(file);
   const taskId = await createSplatTask(fileToken);
-  return pollTask(taskId, onProgress);
+  const output = await pollTask(taskId, onProgress);
+  return { ...output, model_url: `${TRIPO_BASE}/model/${taskId}` };
 }
