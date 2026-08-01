@@ -30,22 +30,3 @@ export async function fetchPublicSite(slug) {
   const res = await fetch(`/api/site/public/${encodeURIComponent(slug)}`);
   return unwrap(res);
 }
-
-// Starts (or resumes) connecting one of the seller's social accounts via
-// Zernio — returns a hosted login URL to open in a new tab for that
-// specific platform. No tokens ever pass through this app.
-export async function requestConnectUrl(platform = "instagram") {
-  const res = await authFetch("/api/site/connect", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform }),
-  });
-  return unwrap(res);
-}
-
-// Re-checks which platforms are actually linked after the seller returns
-// from the hosted login page, and syncs our stored status to match.
-export async function refreshConnectionStatus() {
-  const res = await authFetch("/api/site/connect/status");
-  return unwrap(res);
-}

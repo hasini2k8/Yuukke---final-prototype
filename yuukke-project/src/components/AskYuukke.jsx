@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Sparkles, X, Send, Mic, MicOff, Volume2 } from "lucide-react";
+import { Sparkles, X, Send } from "lucide-react";
 import { theme } from "../theme";
 import { Spinner } from "./Shared";
+import MicButton from "./MicButton";
+import SpeakButton from "./SpeakButton";
 import { askGeminiChat } from "../lib/ai";
-import { speak, useVoiceInput } from "../lib/speech";
 
 const PAGE_NAMES = {
   dashboard: "the dashboard overview",
@@ -13,7 +14,7 @@ const PAGE_NAMES = {
 
 function buildSystemPrompt(pageId, businessName) {
   const pageContext = PAGE_NAMES[pageId] || "the Yuukke seller dashboard";
-  return `You are "Ask Yuukke", a patient, encouraging in-app helper for ${businessName || "a small-business owner"} selling on Yuukke, a marketplace for women-owned businesses in India. Many sellers are new to selling online, may have limited reading confidence, or prefer speaking over typing. The seller is currently on ${pageContext}. Answer their question simply, in short plain sentences (2-4 sentences max), avoiding jargon — explain any business/tech term you must use (like GST, MSME, SEO) in one plain phrase. Be warm and never make them feel behind.`;
+  return `You are "Ask Yuukke", a patient, encouraging in-app helper for ${businessName || "a small-business owner"} selling on Yuukke, a marketplace for small businesses in India. Many sellers are new to selling online, may have limited reading confidence, or prefer speaking over typing. The seller is currently on ${pageContext}. Answer their question simply, in short plain sentences (2-4 sentences max), avoiding jargon — explain any business/tech term you must use (like GST, MSME, SEO) in one plain phrase. Be warm and never make them feel behind.`;
 }
 
 export default function AskYuukke({ pageId, businessName, speechLang }) {
@@ -22,7 +23,6 @@ export default function AskYuukke({ pageId, businessName, speechLang }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
-  const { listening, toggle, supported } = useVoiceInput(speechLang, (t) => setInput((prev) => (prev ? prev + " " + t : t)));
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -72,12 +72,9 @@ export default function AskYuukke({ pageId, businessName, speechLang }) {
                 }}>
                   {msg.content}
                   {msg.role === "assistant" && (
-                    <button aria-label="Read this message aloud" onClick={() => speak(msg.content, speechLang)} style={{
-                      display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer",
-                      color: theme.wine, padding: 0, marginTop: 6, fontSize: 10.5,
-                    }}>
-                      <Volume2 size={11} /> Listen
-                    </button>
+                    <div style={{ marginTop: 6 }}>
+                      <SpeakButton text={msg.content} lang={speechLang} />
+                    </div>
                   )}
                 </div>
               </div>
@@ -90,18 +87,7 @@ export default function AskYuukke({ pageId, businessName, speechLang }) {
           </div>
 
           <div style={{ display: "flex", gap: 6, padding: 10, borderTop: `1px solid ${theme.line}` }}>
-            <button
-              aria-label={listening ? "Stop voice input" : "Speak your question"}
-              onClick={toggle}
-              disabled={!supported}
-              style={{
-                width: 34, height: 34, borderRadius: "50%", border: "none", flexShrink: 0, cursor: supported ? "pointer" : "default",
-                background: listening ? theme.wine : theme.creamDark, color: listening ? "#fff" : theme.inkSoft,
-                display: "flex", alignItems: "center", justifyContent: "center", opacity: supported ? 1 : 0.4,
-              }}
-            >
-              {listening ? <Mic size={15} /> : <MicOff size={15} />}
-            </button>
+            <MicButton size={34} lang={speechLang} onResult={(t) => setInput((prev) => (prev ? prev + " " + t : t))} label="Speak your question" />
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}

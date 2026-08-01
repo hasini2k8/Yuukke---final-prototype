@@ -4,8 +4,11 @@ import { theme } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import { Spinner } from "../components/Shared";
 import PlatformPostPreview from "../components/PlatformPostPreview";
-import { askGeminiJSON, generateImage, SOCIAL_POST_SYSTEM_PROMPT } from "../lib/ai";
+import MicButton from "../components/MicButton";
+import SpeakButton from "../components/SpeakButton";
+import { askGeminiJSON, generateImage, MULTI_PLATFORM_POST_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite } from "../lib/site";
+import { fetchConnections } from "../lib/social";
 import { fetchPosts, createPost, updatePost, deletePost, checkPostStatus } from "../lib/posts";
 import { EN_STRINGS } from "../lib/strings";
 
@@ -23,19 +26,23 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
   const [site, setSite] = useState(null);
   const [posts, setPosts] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [platform, setPlatform] = useState("");
+  const [platforms, setPlatforms] = useState([]);
   const [postTheme, setPostTheme] = useState("");
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
   const [previewPost, setPreviewPost] = useState(null);
+  const [connectedPlatforms, setConnectedPlatforms] = useState([]);
 
   useEffect(() => {
     fetchSite().then(setSite).catch(() => {});
+    fetchConnections().then((rows) => setConnectedPlatforms(rows.map((c) => c.platform))).catch(() => {});
     fetchPosts().then((loaded) => {
       setPosts(loaded);
-      // Posts are scheduled with Zernio automatically when created — this
-      // just checks what actually happened for anything past its date, so
-      // status reflects reality instead of staying "scheduled" forever.
+      // Posts due today are published right away when created (see
+      // server/socialSchedule.js) and future ones by a background poller
+      // (server/scheduler.js) — this just re-checks anything that's overdue
+      // as a safety net, so status reflects reality instead of staying
+      // "scheduled" forever if the server wasn't running at the right moment.
       const today = isoDate(new Date());
       loaded
         .filter((p) => p.status !== "posted" && p.scheduledFor <= today)
@@ -46,8 +53,6 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
         });
     }).catch(() => {});
   }, []);
-
-  const connectedPlatforms = Object.entries(site?.connections || {}).filter(([, c]) => c?.connected).map(([p]) => p);
 
   const days = useMemo(() => {
     const year = month.getFullYear(), m = month.getMonth();
@@ -69,23 +74,32 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
 
   function openComposer(date) {
     setSelectedDate(isoDate(date));
-    setPlatform(connectedPlatforms[0] || "");
+    setPlatforms([...connectedPlatforms]); // default to posting everywhere connected
     setPostTheme("");
     setGenError("");
   }
 
+  function togglePlatform(p) {
+    setPlatforms((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
+  }
+
+  // One theme, one generated image, one AI call — but a caption tailored to
+  // each selected platform's own tone, and a separate post row per
+  // platform so each publishes (and can succeed or fail) independently.
   async function generate() {
-    if (!platform || !postTheme.trim()) return;
+    if (!platforms.length || !postTheme.trim()) return;
     setGenerating(true);
     setGenError("");
     try {
-      const context = `Business: ${site?.businessName || "this business"}\nTagline: ${site?.tagline || ""}\nCategory: ${site?.category || ""}\nPlatform: ${platform}\nPost theme: ${postTheme}`;
-      const { caption, imagePrompt } = await askGeminiJSON(SOCIAL_POST_SYSTEM_PROMPT, context);
+      const context = `Business: ${site?.businessName || "this business"}\nTagline: ${site?.tagline || ""}\nCategory: ${site?.category || ""}\nTarget platforms: ${platforms.join(", ")}\nPost theme: ${postTheme}`;
+      const { captions, imagePrompt } = await askGeminiJSON(MULTI_PLATFORM_POST_SYSTEM_PROMPT, context);
       const imageDataUrl = await generateImage(imagePrompt);
-      const post = await createPost({ platform, caption, imageDataUrl, scheduledFor: selectedDate });
-      setPosts((p) => [...p, post]);
+      const created = await Promise.all(
+        platforms.map((p) => createPost({ platform: p, caption: captions?.[p] || captions?.[Object.keys(captions)[0]] || "", imageDataUrl, scheduledFor: selectedDate }))
+      );
+      setPosts((p) => [...p, ...created]);
       setSelectedDate(null);
-      setPreviewPost(post);
+      setPreviewPost(created[0]);
     } catch (e) {
       setGenError(e.message || "Couldn't generate that post just now.");
     } finally {
@@ -166,29 +180,35 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
                 <p style={{ fontSize: 13.5, fontWeight: 700, color: theme.ink, margin: 0 }}>New post for {selectedDate}</p>
                 <button onClick={() => setSelectedDate(null)} style={{ background: "none", border: "none", cursor: "pointer", color: theme.inkSoft }}><X size={16} /></button>
               </div>
+              <p style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 8 }}>Posts to every platform selected below, all at once.</p>
               <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
                 {connectedPlatforms.map((p) => {
                   const Icon = PLATFORM_META[p].icon;
+                  const selected = platforms.includes(p);
                   return (
-                    <button key={p} onClick={() => setPlatform(p)} style={{
+                    <button key={p} onClick={() => togglePlatform(p)} style={{
                       display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999,
-                      border: `1.5px solid ${platform === p ? theme.wine : theme.line}`, background: platform === p ? theme.wine : "#fff",
-                      color: platform === p ? "#fff" : theme.ink, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      border: `1.5px solid ${selected ? theme.wine : theme.line}`, background: selected ? theme.wine : "#fff",
+                      color: selected ? "#fff" : theme.ink, fontSize: 12, fontWeight: 700, cursor: "pointer",
                     }}>
                       <Icon size={13} /> {PLATFORM_META[p].label}
                     </button>
                   );
                 })}
               </div>
-              <textarea rows={2} value={postTheme} onChange={(e) => setPostTheme(e.target.value)} placeholder="e.g. Diwali sale announcement, new arrivals, a behind-the-scenes look"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical", marginBottom: 12 }} />
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 12 }}>
+                <textarea rows={2} value={postTheme} onChange={(e) => setPostTheme(e.target.value)} placeholder="e.g. Diwali sale announcement, new arrivals, a behind-the-scenes look"
+                  style={{ flex: 1, minWidth: 0, padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical" }} />
+                <MicButton size={34} lang={speechLang} onResult={(t) => setPostTheme((v) => (v ? `${v} ${t}` : t))} />
+              </div>
               {genError && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 10 }}>{genError}</p>}
-              <button onClick={generate} disabled={generating || !platform || !postTheme.trim()} style={{
+              <button onClick={generate} disabled={generating || !platforms.length || !postTheme.trim()} style={{
                 display: "flex", alignItems: "center", gap: 8, background: theme.wine, color: "#fff", border: "none",
                 borderRadius: 12, padding: "11px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                opacity: !platform || !postTheme.trim() ? 0.5 : 1,
+                opacity: !platforms.length || !postTheme.trim() ? 0.5 : 1,
               }}>
-                {generating ? <Spinner size={14} /> : <Wand2 size={14} />} {generating ? "Generating…" : "Generate post"}
+                {generating ? <Spinner size={14} /> : <Wand2 size={14} />}
+                {generating ? "Generating…" : platforms.length > 1 ? `Generate & post to ${platforms.length} platforms` : "Generate post"}
               </button>
             </div>
           )}
@@ -247,6 +267,7 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
               </span>
               <button onClick={() => setPreviewPost(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#fff" }}><X size={18} /></button>
             </div>
+            <SpeakButton text={previewPost.caption} lang={speechLang} color="#fff" />
             <PlatformPostPreview
               platform={previewPost.platform}
               businessName={site?.businessName}

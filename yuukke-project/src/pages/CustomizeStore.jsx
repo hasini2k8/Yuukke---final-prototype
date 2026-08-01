@@ -4,8 +4,11 @@ import { theme, ACCENTS, ALL_SECTIONS } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import StorePreview from "../components/StorePreview";
 import { Spinner } from "../components/Shared";
+import MicButton from "../components/MicButton";
+import SpeakButton from "../components/SpeakButton";
 import { askGeminiJSON, generateImage, buildSurveyContext, BUSINESS_SITE_SYSTEM_PROMPT } from "../lib/ai";
-import { fetchSite, saveSite, requestConnectUrl, refreshConnectionStatus } from "../lib/site";
+import { fetchSite, saveSite } from "../lib/site";
+import { connectPlatform, fetchConnections, disconnectPlatform } from "../lib/social";
 import { EN_STRINGS } from "../lib/strings";
 
 const HERO_STYLES = ["minimal", "bold", "warm", "festive"];
@@ -16,15 +19,11 @@ const PLATFORM_LABELS = {
   pinterest: { label: "Pinterest", icon: Pin },
 };
 
-const connectInputStyle = {
-  width: "100%", padding: "9px 12px", borderRadius: 9, border: `1.5px solid ${theme.line}`,
-  fontSize: 12.5, fontFamily: theme.fontBody, outline: "none", background: "#fff", marginBottom: 8,
-};
 const DEFAULT_CONFIG = {
   accentColor: theme.wine, tagline: "Handmade with heart", heroStyle: "warm",
   sections: ["Hero banner", "Best sellers", "About the maker"],
   businessName: "", about: "", category: "", isTech: false, logoPrompt: "", logoDataUrl: "",
-  slug: "", published: false, connections: { instagram: { connected: false }, linkedin: { connected: false }, pinterest: { connected: false } },
+  slug: "", published: false,
 };
 
 export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, products, businessProfile, speechLang }) {
@@ -36,19 +35,21 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
   const [logoError, setLogoError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState("");
-  const [instagramHandle, setInstagramHandle] = useState("");
-  const [connecting, setConnecting] = useState(false);
+  const [connections, setConnections] = useState([]);
+  const [connectingPlatform, setConnectingPlatform] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [connectError, setConnectError] = useState("");
 
   useEffect(() => {
     fetchSite().then((saved) => {
-      if (saved) {
-        setConfig((c) => ({ ...c, ...saved, connections: { ...c.connections, ...saved.connections } }));
-        if (saved.connections?.instagram?.handle) setInstagramHandle(saved.connections.instagram.handle);
-      }
+      if (saved) setConfig((c) => ({ ...c, ...saved }));
     }).catch(() => {});
+    loadConnections();
   }, []);
+
+  function loadConnections() {
+    return fetchConnections().then(setConnections).catch(() => {});
+  }
 
   async function generate() {
     if (!description.trim()) return;
@@ -97,11 +98,13 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     }
   }
 
-  async function connectSocials(platform = "instagram") {
-    setConnecting(true);
+  // One click per platform — real OAuth doesn't need a username typed in
+  // ahead of time, the platform tells us who logged in once they're done.
+  async function connectSocial(platform) {
+    setConnectingPlatform(platform);
     setConnectError("");
     // Open the tab synchronously, in direct response to the click — by the
-    // time the URL comes back from two awaited requests below, the browser
+    // time the URL comes back from the awaited request below, the browser
     // no longer treats a fresh window.open() as tied to that click and
     // silently blocks it as a popup. Navigating this already-open tab once
     // we have the URL doesn't have that problem. (Passing "noopener" here
@@ -111,29 +114,35 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null;
     try {
-      if (platform === "instagram" && instagramHandle.trim()) {
-        await saveSite({
-          businessName: config.businessName,
-          connections: { ...config.connections, instagram: { ...config.connections?.instagram, handle: instagramHandle.trim() } },
-        });
-      }
-      const { url } = await requestConnectUrl(platform);
+      const { url } = await connectPlatform(platform);
       if (tab) tab.location.href = url;
       else window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {
       tab?.close();
-      setConnectError(e.message || "Couldn't start connecting your accounts just now.");
+      setConnectError(e.message || "Couldn't start connecting that account just now.");
     } finally {
-      setConnecting(false);
+      setConnectingPlatform("");
     }
   }
 
+  async function disconnectSocial(platform) {
+    setConnectError("");
+    try {
+      await disconnectPlatform(platform);
+      await loadConnections();
+    } catch (e) {
+      setConnectError(e.message || "Couldn't disconnect that account just now.");
+    }
+  }
+
+  // The OAuth flow finishes in a separate tab (server/index.js's /callback
+  // route) — this re-checks what's actually connected once the seller's
+  // back here, since we have no direct way to hear from that other tab.
   async function refreshConnections() {
     setRefreshing(true);
     setConnectError("");
     try {
-      const saved = await refreshConnectionStatus();
-      setConfig((c) => ({ ...c, ...saved, connections: { ...c.connections, ...saved.connections } }));
+      await loadConnections();
     } catch (e) {
       setConnectError(e.message || "Couldn't check your connection status just now.");
     } finally {
@@ -170,9 +179,12 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
           <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
             <label style={{ display: "block", marginBottom: 14 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Describe the look and feel you want</span>
-              <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. warm and earthy, festive but not loud, feels handmade"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical" }} />
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. warm and earthy, festive but not loud, feels handmade"
+                  style={{ flex: 1, minWidth: 0, padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical" }} />
+                <MicButton size={34} lang={speechLang} onResult={(t) => setDescription((v) => (v ? `${v} ${t}` : t))} />
+              </div>
             </label>
             {error && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 12 }}>{error}</p>}
             <button onClick={generate} disabled={loading || !description.trim()} style={{
@@ -197,7 +209,9 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
             </div>
 
             <label style={{ display: "block", marginBottom: 18 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Tagline</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
+                Tagline <SpeakButton text={config.tagline} lang={speechLang} />
+              </span>
               <input value={config.tagline} onChange={(e) => setConfig((c) => ({ ...c, tagline: e.target.value }))} style={{
                 width: "100%", padding: "11px 14px", borderRadius: 11, border: `1.5px solid ${theme.line}`,
                 fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream,
@@ -243,7 +257,9 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
             </label>
 
             <label style={{ display: "block", marginBottom: 18 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>About</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
+                About <SpeakButton text={config.about} lang={speechLang} />
+              </span>
               <textarea rows={3} value={config.about} onChange={(e) => setConfig((c) => ({ ...c, about: e.target.value }))} style={{
                 width: "100%", padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`,
                 fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical",
@@ -295,52 +311,53 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
 
             <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 10 }}>Connect your socials</p>
             <p style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
-              One click, no technical setup. You'll log in the same way you already do on Instagram — nothing to copy or paste, and no passwords are ever shared with Yuukke.
+              One click per platform, no technical setup. You'll log in the same way you already do — nothing to copy or paste, and no passwords are ever shared with Yuukke.
             </p>
-
-            <label style={{ display: "block", marginBottom: 10 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>Your Instagram username</span>
-              <input value={instagramHandle} onChange={(e) => setInstagramHandle(e.target.value)} placeholder="e.g. mybrandshop" style={connectInputStyle} />
-            </label>
 
             {connectError && <p style={{ color: "#a32d2d", fontSize: 11.5, margin: "0 0 10px" }}>{connectError}</p>}
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <button onClick={() => connectSocials()} disabled={connecting || !config.businessName} style={{
-                display: "flex", alignItems: "center", gap: 7, background: theme.wine, color: "#fff", border: "none",
-                borderRadius: 10, padding: "10px 16px", fontWeight: 700, fontSize: 12.5, cursor: !config.businessName ? "default" : "pointer",
-                opacity: !config.businessName ? 0.5 : 1,
-              }}>
-                {connecting ? <Spinner size={13} /> : <ExternalLink size={13} />} Connect my accounts
-              </button>
-              <button onClick={refreshConnections} disabled={refreshing} style={{
-                display: "flex", alignItems: "center", gap: 7, background: theme.creamDark, color: theme.ink, border: "none",
-                borderRadius: 10, padding: "10px 16px", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
-              }}>
-                {refreshing ? <Spinner size={13} color={theme.ink} /> : null} I'm done connecting
-              </button>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
               {Object.entries(PLATFORM_LABELS).map(([id, meta]) => {
-                const connected = !!config.connections?.[id]?.connected;
-                if (id === "linkedin" && !config.isTech && !connected) return null;
+                const connection = connections.find((c) => c.platform === id);
+                if (id === "linkedin" && !config.isTech && !connection) return null;
                 const Icon = meta.icon;
-                const clickable = !connected && !!config.businessName;
                 return (
-                  <button key={id} onClick={clickable ? () => connectSocials(id) : undefined} disabled={!clickable} style={{
-                    display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999,
-                    border: `1.5px solid ${connected ? "#2c6e49" : theme.line}`, background: connected ? "#e6f2ea" : "#fff",
-                    color: connected ? "#2c6e49" : theme.inkSoft, fontSize: 11.5, fontWeight: 700,
-                    cursor: clickable ? "pointer" : "default", opacity: !config.businessName ? 0.5 : 1,
+                  <div key={id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px",
+                    borderRadius: 12, border: `1.5px solid ${connection ? "#2c6e49" : theme.line}`, background: connection ? "#e6f2ea" : "#fff",
                   }}>
-                    {connected ? <Check size={12} /> : <Icon size={12} />} {connected ? meta.label : `Connect ${meta.label}`}
-                  </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Icon size={15} color={connection ? "#2c6e49" : theme.inkSoft} />
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: connection ? "#2c6e49" : theme.ink }}>
+                        {connection ? `Connected as @${connection.username || "your account"}` : meta.label}
+                      </span>
+                    </div>
+                    {connection ? (
+                      <button onClick={() => disconnectSocial(id)} style={{ background: "none", border: "none", color: "#2c6e49", fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button onClick={() => connectSocial(id)} disabled={connectingPlatform === id || !config.businessName} style={{
+                        display: "flex", alignItems: "center", gap: 6, background: theme.wine, color: "#fff", border: "none",
+                        borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 12, cursor: !config.businessName ? "default" : "pointer",
+                        opacity: !config.businessName ? 0.5 : 1,
+                      }}>
+                        {connectingPlatform === id ? <Spinner size={12} /> : <ExternalLink size={12} />} Connect
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
 
-            {config.published && (config.connections?.instagram?.connected || config.connections?.pinterest?.connected || config.connections?.linkedin?.connected) && (
+            <button onClick={refreshConnections} disabled={refreshing} style={{
+              display: "flex", alignItems: "center", gap: 7, background: "none", border: `1.5px solid ${theme.line}`, color: theme.ink,
+              borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", marginBottom: 16,
+            }}>
+              {refreshing ? <Spinner size={12} color={theme.ink} /> : null} Refresh status
+            </button>
+
+            {config.published && connections.length > 0 && (
               <button onClick={() => goTo("calendar")} style={{
                 display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "center",
                 background: theme.wine, color: "#fff", border: "none", borderRadius: 12, padding: "11px 16px",

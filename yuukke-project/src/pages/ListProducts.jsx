@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Wand2, Plus, Trash2, Mic, MicOff, Send, Ruler, RotateCcw, ImagePlus } from "lucide-react";
+import { ArrowLeft, Wand2, Plus, Trash2, Send, Ruler, RotateCcw, ImagePlus } from "lucide-react";
 import { theme } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import { Spinner } from "../components/Shared";
 import { ChatBubble, UniquenessCard, PhotoInsightCard } from "../components/ChatMessages";
 import ProductDetailCard from "../components/ProductDetailCard";
 import SplatViewer from "../components/SplatViewer";
+import MicButton from "../components/MicButton";
 import { askGeminiJSON, askGeminiChat, askGeminiVision, checkUniqueness, buildSurveyContext, PRODUCT_LISTING_SYSTEM_PROMPT, PRODUCT_UNIQUENESS_VISION_PROMPT, CHAT_SYSTEM_PROMPT } from "../lib/ai";
 import { saveProduct } from "../lib/products";
-import { useVoiceInput } from "../lib/speech";
+import { isVoiceInputSupported } from "../lib/speech";
 import { EN_STRINGS } from "../lib/strings";
 
 function miniInput(bold) {
@@ -35,7 +36,7 @@ export default function ListProductsPage({ goTo, products, setProducts, business
   const [saveError, setSaveError] = useState("");
   const scrollRef = useRef(null);
   const imageInputRef = useRef(null);
-  const { listening, toggle, supported } = useVoiceInput(speechLang, (t) => setInput((prev) => (prev ? prev + " " + t : t)));
+  const voiceSupported = isVoiceInputSupported();
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -224,19 +225,7 @@ export default function ListProductsPage({ goTo, products, setProducts, business
           >
             <ImagePlus size={18} />
           </button>
-          <button
-            aria-label={listening ? "Stop voice input" : "Speak instead of typing"}
-            onClick={toggle}
-            disabled={!supported}
-            style={{
-              width: 42, height: 42, borderRadius: "50%", border: "none", flexShrink: 0, cursor: supported ? "pointer" : "default",
-              background: listening ? theme.wine : theme.creamDark, color: listening ? "#fff" : theme.inkSoft,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              animation: listening ? "pulse 1.4s ease-in-out infinite" : "none", opacity: supported ? 1 : 0.4,
-            }}
-          >
-            {listening ? <Mic size={18} /> : <MicOff size={18} />}
-          </button>
+          <MicButton size={42} lang={speechLang} onResult={(t) => setInput((prev) => (prev ? prev + " " + t : t))} />
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -249,7 +238,7 @@ export default function ListProductsPage({ goTo, products, setProducts, business
             <Send size={16} />
           </button>
         </div>
-        {!supported && <p style={{ fontSize: 11, color: theme.inkSoft, marginTop: 8 }}>Voice input isn't supported in this browser — typing still works fully.</p>}
+        {!voiceSupported && <p style={{ fontSize: 11, color: theme.inkSoft, marginTop: 8 }}>Voice input isn't supported in this browser — typing still works fully.</p>}
       </div>
 
       <div style={{ textAlign: "center", marginBottom: 30 }}>

@@ -93,7 +93,6 @@ CREATE TABLE IF NOT EXISTS sites (
   connections TEXT,
   brand_guidelines TEXT,
   characters TEXT,
-  zernio_profile_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -106,7 +105,7 @@ CREATE TABLE IF NOT EXISTS posts (
   image_data_url TEXT,
   scheduled_for TEXT,
   status TEXT NOT NULL,
-  zernio_post_id TEXT,
+  external_post_id TEXT,
   schedule_error TEXT,
   created_at TEXT NOT NULL
 );
@@ -120,6 +119,31 @@ CREATE TABLE IF NOT EXISTS business_profiles (
   style_mood TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+-- Real OAuth tokens for the seller's own Instagram/LinkedIn/Pinterest
+-- accounts (server/socialAuth.js) — replaces the old Zernio-hosted
+-- connection. Never sent to the frontend; only {connected, username} is.
+CREATE TABLE IF NOT EXISTS social_connections (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  platform TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  expires_at TEXT,
+  account_id TEXT,
+  username TEXT,
+  connected_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, platform)
+);
+
+-- Short-lived, single-use tokens that carry the logged-in seller's identity
+-- across the OAuth redirect round trip (the callback is a plain browser GET
+-- with no Authorization header available).
+CREATE TABLE IF NOT EXISTS oauth_states (
+  state TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 `);
 

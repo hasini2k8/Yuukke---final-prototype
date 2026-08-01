@@ -2,9 +2,10 @@
 // website — one row per seller (was a shared singleton). See productStore.js
 // for the production-persistence caveat.
 //
-// `zernioProfileId` and `connections.<platform>.{connected,handle,accountId}`
-// are set via zernioClient.js/server/index.js's /api/site/connect routes —
-// sellers never hand this app a raw access token; Zernio holds those.
+// Social account connections live in social_connections
+// (server/socialConnectionStore.js) now, not here — this file's
+// `connections` column is unused going forward; kept only so old rows still
+// round-trip cleanly.
 import crypto from "node:crypto";
 import { get, run } from "./db.js";
 
@@ -36,7 +37,6 @@ function toSite(row) {
     connections: row.connections ? JSON.parse(row.connections) : {},
     brandGuidelines: row.brand_guidelines ? JSON.parse(row.brand_guidelines) : null,
     characters: row.characters ? JSON.parse(row.characters) : [],
-    zernioProfileId: row.zernio_profile_id || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -59,16 +59,15 @@ export async function saveSite(userId, patch) {
   if (!merged.createdAt) merged.createdAt = now;
 
   run(
-    `INSERT INTO sites (user_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, brand_guidelines, characters, zernio_profile_id, created_at, updated_at)
-     VALUES (@user_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @brand_guidelines, @characters, @zernio_profile_id, @created_at, @updated_at)
+    `INSERT INTO sites (user_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, brand_guidelines, characters, created_at, updated_at)
+     VALUES (@user_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @brand_guidelines, @characters, @created_at, @updated_at)
      ON CONFLICT(user_id) DO UPDATE SET
        business_name = excluded.business_name, tagline = excluded.tagline, about = excluded.about,
        category = excluded.category, accent_color = excluded.accent_color, hero_style = excluded.hero_style,
        sections = excluded.sections, is_tech = excluded.is_tech, logo_prompt = excluded.logo_prompt,
        logo_data_url = excluded.logo_data_url, slug = excluded.slug, published = excluded.published,
        connections = excluded.connections, brand_guidelines = excluded.brand_guidelines,
-       characters = excluded.characters, zernio_profile_id = excluded.zernio_profile_id,
-       updated_at = excluded.updated_at`,
+       characters = excluded.characters, updated_at = excluded.updated_at`,
     {
       user_id: userId,
       business_name: merged.businessName || null,
@@ -86,7 +85,6 @@ export async function saveSite(userId, patch) {
       connections: JSON.stringify(merged.connections || {}),
       brand_guidelines: merged.brandGuidelines ? JSON.stringify(merged.brandGuidelines) : null,
       characters: merged.characters ? JSON.stringify(merged.characters) : null,
-      zernio_profile_id: merged.zernioProfileId || null,
       created_at: merged.createdAt,
       updated_at: merged.updatedAt,
     }

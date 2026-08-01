@@ -101,6 +101,7 @@ export default function App() {
         ) : businessProfile === null ? (
           <BusinessSurveyModal
             onSaved={(profile) => setBusinessProfile(profile)}
+            speechLang="en-IN"
           />
         ) : (
           <>

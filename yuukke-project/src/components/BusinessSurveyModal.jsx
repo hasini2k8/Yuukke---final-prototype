@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { theme } from "../theme";
 import { Logo, Spinner } from "./Shared";
+import MicButton from "./MicButton";
 import { saveBusinessProfile } from "../lib/businessProfile";
 
 const PRICE_RANGES = [
@@ -28,7 +29,7 @@ function fieldStyle() {
 // guidelines, product-listing assistant) has real grounding in what this
 // business actually sells instead of only whatever the seller happens to
 // type into any one of those separately.
-export default function BusinessSurveyModal({ onSaved }) {
+export default function BusinessSurveyModal({ onSaved, speechLang }) {
   const [sellsWhat, setSellsWhat] = useState("");
   const [category, setCategory] = useState("");
   const [targetCustomers, setTargetCustomers] = useState("");
@@ -66,19 +67,28 @@ export default function BusinessSurveyModal({ onSaved }) {
         <form onSubmit={handleSubmit}>
           <label style={{ display: "block", marginBottom: 16 }}>
             <span style={label()}>What do you want to sell?</span>
-            <textarea required rows={3} value={sellsWhat} onChange={(e) => setSellsWhat(e.target.value)}
-              placeholder="e.g. Hand-block-printed cotton home textiles — table runners, cushion covers, scarves"
-              style={{ ...fieldStyle(), resize: "vertical" }} />
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <textarea required rows={3} value={sellsWhat} onChange={(e) => setSellsWhat(e.target.value)}
+                placeholder="e.g. Hand-block-printed cotton home textiles — table runners, cushion covers, scarves"
+                style={{ ...fieldStyle(), flex: 1, minWidth: 0, resize: "vertical" }} />
+              <MicButton size={32} lang={speechLang} onResult={(t) => setSellsWhat((v) => (v ? `${v} ${t}` : t))} />
+            </div>
           </label>
 
           <label style={{ display: "block", marginBottom: 16 }}>
             <span style={label()}>Category</span>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Home Decor, Fashion & Apparel, Festive Gifting" style={fieldStyle()} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Home Decor, Fashion & Apparel, Festive Gifting" style={{ ...fieldStyle(), flex: 1, minWidth: 0 }} />
+              <MicButton size={32} lang={speechLang} onResult={(t) => setCategory((v) => (v ? `${v} ${t}` : t))} />
+            </div>
           </label>
 
           <label style={{ display: "block", marginBottom: 16 }}>
             <span style={label()}>Who's it for?</span>
-            <input value={targetCustomers} onChange={(e) => setTargetCustomers(e.target.value)} placeholder="e.g. Urban gift buyers who care about handmade craft" style={fieldStyle()} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input value={targetCustomers} onChange={(e) => setTargetCustomers(e.target.value)} placeholder="e.g. Urban gift buyers who care about handmade craft" style={{ ...fieldStyle(), flex: 1, minWidth: 0 }} />
+              <MicButton size={32} lang={speechLang} onResult={(t) => setTargetCustomers((v) => (v ? `${v} ${t}` : t))} />
+            </div>
           </label>
 
           <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>

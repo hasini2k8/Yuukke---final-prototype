@@ -8,13 +8,17 @@ export function speak(text, lang) {
   window.speechSynthesis.speak(u);
 }
 
+export function isVoiceInputSupported() {
+  return typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
 // Wraps the (webkit-prefixed) SpeechRecognition API. Falls back gracefully
 // (supported === false) in browsers that don't implement it — voice input
 // is an enhancement, typing always still works.
 export function useVoiceInput(lang, onResult) {
   const recRef = useRef(null);
   const [listening, setListening] = useState(false);
-  const supported = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const supported = isVoiceInputSupported();
 
   function toggle() {
     if (!supported) return;

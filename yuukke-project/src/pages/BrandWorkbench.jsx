@@ -3,6 +3,8 @@ import { ArrowLeft, Wand2, BookOpen, Smile, Trash2, ArrowRight } from "lucide-re
 import { theme } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import { Spinner } from "../components/Shared";
+import MicButton from "../components/MicButton";
+import SpeakButton from "../components/SpeakButton";
 import { askGeminiJSON, generateImage, buildCharacterPrompt, BRAND_GUIDELINES_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite, saveSite } from "../lib/site";
 import { EN_STRINGS } from "../lib/strings";
@@ -129,7 +131,9 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
                   </p>
                   <p style={{ fontSize: 12, color: theme.inkSoft, marginBottom: 20 }}>{guidelines.fonts?.pairingNote}</p>
 
-                  <p style={{ fontSize: 11.5, fontWeight: 700, color: theme.inkSoft, letterSpacing: 0.5, marginBottom: 10 }}>TONE OF VOICE</p>
+                  <p style={{ fontSize: 11.5, fontWeight: 700, color: theme.inkSoft, letterSpacing: 0.5, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    TONE OF VOICE <SpeakButton text={guidelines.toneOfVoice} lang={speechLang} />
+                  </p>
                   <p style={{ fontSize: 13, color: theme.ink, lineHeight: 1.6, marginBottom: 20 }}>{guidelines.toneOfVoice}</p>
 
                   <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
@@ -161,9 +165,12 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
                 Cute mascot art for social posts, packaging, or stickers. Describe one, or leave it blank and let the AI invent one that fits.
               </p>
 
-              <textarea rows={2} value={characterPrompt} onChange={(e) => setCharacterPrompt(e.target.value)}
-                placeholder="e.g. a tiny elephant carrying a diya lamp"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical", marginBottom: 12 }} />
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 12 }}>
+                <textarea rows={2} value={characterPrompt} onChange={(e) => setCharacterPrompt(e.target.value)}
+                  placeholder="e.g. a tiny elephant carrying a diya lamp"
+                  style={{ flex: 1, minWidth: 0, padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${theme.line}`, fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical" }} />
+                <MicButton size={34} lang={speechLang} onResult={(t) => setCharacterPrompt((v) => (v ? `${v} ${t}` : t))} />
+              </div>
               {characterError && <p style={{ color: "#a32d2d", fontSize: 12.5, marginBottom: 12 }}>{characterError}</p>}
               <button onClick={generateCharacter} disabled={characterLoading} style={{
                 display: "flex", alignItems: "center", gap: 8, background: theme.wine, color: "#fff", border: "none",

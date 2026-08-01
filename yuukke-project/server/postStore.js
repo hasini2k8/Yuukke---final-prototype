@@ -14,7 +14,7 @@ function toPost(row) {
     imageDataUrl: row.image_data_url || "",
     scheduledFor: row.scheduled_for || "",
     status: row.status,
-    zernioPostId: row.zernio_post_id || null,
+    externalPostId: row.external_post_id || null,
     scheduleError: row.schedule_error || null,
     createdAt: row.created_at,
   };
@@ -22,6 +22,12 @@ function toPost(row) {
 
 export async function listPosts(userId) {
   return all("SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC", [userId]).map(toPost);
+}
+
+// Cross-user — the background scheduler (server/scheduler.js) needs every
+// seller's due posts, not just one seller's.
+export async function listScheduledDue(dateIso) {
+  return all("SELECT * FROM posts WHERE status = 'scheduled' AND scheduled_for <= ? AND scheduled_for != ''", [dateIso]).map(toPost);
 }
 
 export async function getPost(userId, id) {
@@ -52,9 +58,9 @@ export async function updatePost(userId, id, patch) {
   if (!existing) return null;
   const merged = { ...toPost(existing), ...patch };
   run(
-    `UPDATE posts SET platform = ?, caption = ?, image_data_url = ?, scheduled_for = ?, status = ?, zernio_post_id = ?, schedule_error = ?
+    `UPDATE posts SET platform = ?, caption = ?, image_data_url = ?, scheduled_for = ?, status = ?, external_post_id = ?, schedule_error = ?
      WHERE id = ? AND user_id = ?`,
-    [merged.platform, merged.caption, merged.imageDataUrl, merged.scheduledFor, merged.status, merged.zernioPostId, merged.scheduleError, id, userId]
+    [merged.platform, merged.caption, merged.imageDataUrl, merged.scheduledFor, merged.status, merged.externalPostId, merged.scheduleError, id, userId]
   );
   return toPost(get("SELECT * FROM posts WHERE id = ? AND user_id = ?", [id, userId]));
 }

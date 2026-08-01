@@ -15,7 +15,12 @@ import * as site from "./siteStore.js";
 import * as posts from "./postStore.js";
 import * as businessProfile from "./businessProfileStore.js";
 import { generateOpenAIImage } from "./openaiProxy.js";
-import { createProfile, generateAuthUrl, listConnectedAccounts, uploadMedia, createPost as createZernioPost, getPostStatus } from "./zernioClient.js";
+import * as socialConnections from "./socialConnectionStore.js";
+import { getAuthUrl, completeOAuth } from "./socialAuth.js";
+import { attemptPublish } from "./socialSchedule.js";
+import { startScheduler } from "./scheduler.js";
+
+const SOCIAL_PLATFORMS = new Set(["instagram", "linkedin", "pinterest"]);
 
 const PORT = process.env.TRIPO_PROXY_PORT || 8791;
 
@@ -224,42 +229,6 @@ async function handleSite(req, res, url) {
     }
     return true;
   }
-
-  if (url.pathname === "/api/site/connect" && req.method === "POST") {
-    try {
-      const { platform = "instagram" } = await readJson(req);
-      let current = await site.getSite(user.id);
-      let profileId = current?.zernioProfileId;
-      if (!profileId) {
-        profileId = await createProfile(current?.businessName || "Yuukke seller");
-        current = await site.saveSite(user.id, { zernioProfileId: profileId });
-      }
-      const redirectUrl = `http://${req.headers.host}/`;
-      const authUrl = await generateAuthUrl(profileId, platform, redirectUrl);
-      sendJson(res, 200, { url: authUrl });
-    } catch (e) {
-      sendJson(res, 502, { message: e.message || "Couldn't start connecting your accounts." });
-    }
-    return true;
-  }
-
-  if (url.pathname === "/api/site/connect/status" && req.method === "GET") {
-    try {
-      const current = await site.getSite(user.id);
-      if (!current?.zernioProfileId) { sendJson(res, 200, current || {}); return true; }
-      const accounts = await listConnectedAccounts(current.zernioProfileId);
-      const connections = { ...current.connections };
-      for (const platform of ["instagram", "linkedin", "pinterest"]) {
-        const account = accounts.find((a) => a.platform === platform);
-        if (account) connections[platform] = { connected: true, handle: account.username, accountId: account._id };
-      }
-      const saved = await site.saveSite(user.id, { connections });
-      sendJson(res, 200, saved);
-    } catch (e) {
-      sendJson(res, 502, { message: e.message || "Couldn't check connection status." });
-    }
-    return true;
-  }
   return false;
 }
 
@@ -270,26 +239,86 @@ function parseDataUrl(dataUrl) {
   return { mimeType, buffer: Buffer.from(base64, "base64") };
 }
 
-// Hands a newly-created post to Zernio with scheduledFor set, so it fires
-// on its own later — this is what makes posting genuinely automatic instead
-// of needing a manual click or our server to be running at that moment.
-async function scheduleWithZernio(userId, post) {
-  const currentSite = await site.getSite(userId);
-  const connection = currentSite?.connections?.[post.platform];
-  if (!connection?.connected || !connection?.accountId) {
-    return posts.updatePost(userId, post.id, { scheduleError: `${post.platform} isn't connected yet — connect it on the Storefront tab.` });
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Direct OAuth against each platform's own free API (server/socialAuth.js)
+// — replaces the old Zernio-hosted connection. /connect and /callback are
+// intentionally split: /connect needs the seller's auth token (a normal
+// fetch call), but /callback is a plain browser redirect from Instagram/
+// LinkedIn/Pinterest with no Authorization header available, so it
+// identifies the seller via the single-use oauth_state minted by /connect.
+async function handleSocialAuth(req, res, url) {
+  if (!url.pathname.startsWith("/api/social")) return false;
+
+  const connectMatch = url.pathname.match(/^\/api\/social\/([^/]+)\/connect$/);
+  if (connectMatch && req.method === "GET") {
+    const platform = connectMatch[1];
+    if (!SOCIAL_PLATFORMS.has(platform)) { sendJson(res, 404, { message: "Unknown platform." }); return true; }
+    const user = await requireUser(req, res);
+    if (!user) return true;
+    try {
+      const state = await socialConnections.createOAuthState(user.id, platform);
+      sendJson(res, 200, { url: getAuthUrl(platform, state) });
+    } catch (e) {
+      sendJson(res, 502, { message: e.message || "Couldn't start connecting that account." });
+    }
+    return true;
   }
-  try {
-    const parsed = parseDataUrl(post.imageDataUrl);
-    const mediaPublicUrl = parsed ? await uploadMedia(parsed.buffer, parsed.mimeType) : null;
-    const result = await createZernioPost({
-      platform: post.platform, accountId: connection.accountId, caption: post.caption,
-      mediaPublicUrl, scheduledFor: post.scheduledFor,
-    });
-    return posts.updatePost(userId, post.id, { zernioPostId: result?._id || null, scheduleError: null });
-  } catch (e) {
-    return posts.updatePost(userId, post.id, { scheduleError: e.message || "Couldn't schedule that post." });
+
+  const callbackMatch = url.pathname.match(/^\/api\/social\/([^/]+)\/callback$/);
+  if (callbackMatch && req.method === "GET") {
+    const platform = callbackMatch[1];
+    const code = url.searchParams.get("code");
+    const oauthError = url.searchParams.get("error_description") || url.searchParams.get("error");
+    if (oauthError) {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(`Connection cancelled: ${oauthError}. You can close this tab.`);
+      return true;
+    }
+    try {
+      const stateToken = url.searchParams.get("state");
+      const stateRecord = stateToken && (await socialConnections.consumeOAuthState(stateToken));
+      if (!stateRecord || stateRecord.platform !== platform) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("This connection link is invalid or has expired — please go back and try connecting again.");
+        return true;
+      }
+      const result = await completeOAuth(platform, code);
+      await socialConnections.saveConnection(stateRecord.userId, platform, result);
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(`<!doctype html><html><body style="font-family:sans-serif;text-align:center;padding:60px 20px;">
+        <h2>Connected as @${result.username || "your account"} on ${platform}</h2>
+        <p>You can close this tab now.</p>
+        <script>setTimeout(() => window.close(), 2500);</script>
+      </body></html>`);
+    } catch (e) {
+      res.writeHead(502, { "Content-Type": "text/plain" });
+      res.end(e.message || "Couldn't finish connecting that account.");
+    }
+    return true;
   }
+
+  if (url.pathname === "/api/social/connections" && req.method === "GET") {
+    const user = await requireUser(req, res);
+    if (!user) return true;
+    const rows = await socialConnections.listConnections(user.id);
+    sendJson(res, 200, rows.map((c) => ({ platform: c.platform, connected: true, username: c.username, accountId: c.accountId })));
+    return true;
+  }
+
+  const disconnectMatch = url.pathname.match(/^\/api\/social\/([^/]+)\/disconnect$/);
+  if (disconnectMatch && req.method === "POST") {
+    const user = await requireUser(req, res);
+    if (!user) return true;
+    await socialConnections.deleteConnection(user.id, disconnectMatch[1]);
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  return false;
 }
 
 async function handlePosts(req, res, url) {
@@ -305,7 +334,11 @@ async function handlePosts(req, res, url) {
     try {
       const data = await readJson(req);
       const post = await posts.createPost(user.id, data);
-      const updated = await scheduleWithZernio(user.id, post);
+      // Posts due today publish right away; anything further out is picked
+      // up later by the background scheduler (server/scheduler.js) once its
+      // date arrives — see socialSchedule.js for why this can't just hand
+      // off to a remote scheduler the way Zernio did.
+      const updated = post.scheduledFor && post.scheduledFor <= todayIso() ? await attemptPublish(user.id, post) : post;
       sendJson(res, 201, updated || post);
     } catch (e) {
       sendJson(res, 400, { message: `Couldn't save that post: ${e.message}` });
@@ -328,12 +361,16 @@ async function handlePosts(req, res, url) {
     try {
       const post = await posts.getPost(user.id, statusMatch[1]);
       if (!post) { sendJson(res, 404, { message: "Post not found" }); return true; }
-      if (!post.zernioPostId) { sendJson(res, 200, post); return true; }
-      const result = await getPostStatus(post.zernioPostId);
-      const platformResult = result?.platformResults?.find((p) => p.platform === post.platform);
-      const status = platformResult?.success === true ? "posted" : platformResult?.success === false ? "failed" : post.status;
-      const updated = await posts.updatePost(user.id, post.id, { status, scheduleError: platformResult?.success === false ? platformResult?.error : null });
-      sendJson(res, 200, updated);
+      // Publishing happens synchronously (server/socialSchedule.js) rather
+      // than through a remote scheduler with its own status to poll — this
+      // is just a safety-net retry for a post that's due but the background
+      // scheduler (server/scheduler.js) hasn't ticked over it yet.
+      if (post.status === "scheduled" && post.scheduledFor && post.scheduledFor <= todayIso()) {
+        const updated = await attemptPublish(user.id, post);
+        sendJson(res, 200, updated || post);
+        return true;
+      }
+      sendJson(res, 200, post);
     } catch (e) {
       sendJson(res, 502, { message: e.message || "Couldn't check that post's status." });
     }
@@ -416,6 +453,7 @@ const server = http.createServer(async (req, res) => {
     if (await handleProducts(req, res, url)) return;
     if (await handleSite(req, res, url)) return;
     if (await handlePosts(req, res, url)) return;
+    if (await handleSocialAuth(req, res, url)) return;
     if (await handleBusinessProfile(req, res, url)) return;
     if (await handleOpenAI(req, res, url)) return;
     sendJson(res, 404, { code: -1, message: "Not found" });
@@ -429,4 +467,5 @@ server.listen(PORT, () => {
   if (!process.env.TRIPO_API_KEY) {
     console.log("[dev-server] warning: TRIPO_API_KEY is not set — 3D preview requests will fail.");
   }
+  startScheduler();
 });

@@ -5,6 +5,7 @@ import {
 import { theme } from "../theme";
 import { Logo } from "../components/Shared";
 import DocumentReaderRow from "../components/DocumentReaderRow";
+import MicButton from "../components/MicButton";
 
 function StepBlock({ icon, title, children }) {
   return (
@@ -18,23 +19,39 @@ function StepBlock({ icon, title, children }) {
   );
 }
 function Row({ children }) { return <div style={{ display: "flex", gap: 18, marginBottom: 4, flexWrap: "wrap" }}>{children}</div>; }
-function Input({ label, placeholder, value, onChange, wide }) {
-  return (
-    <label style={{ flex: wide ? "1 1 100%" : "1 1 220px", marginBottom: 18, display: "block" }}>
-      <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>{label}</span>
-      <input placeholder={placeholder} value={value} onChange={onChange} style={{
-        width: "100%", padding: "11px 14px", borderRadius: 11, border: `1.5px solid ${theme.line}`,
-        fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream,
-      }} />
-    </label>
-  );
-}
 
 export default function BusinessRegistrationPage({ goTo, businessName, setBusinessName, speechLang }) {
   const [step, setStep] = useState(0);
   const steps = ["Basic details", "Business profile", "Documents", "Bank details", "Review"];
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
+
+  // Nested so it can close over speechLang without threading it through
+  // every call below. `voice` opts a field out — dictated digits (account
+  // numbers, IFSC codes) are error-prone, so those skip the mic.
+  function Input({ label, placeholder, value, onChange, wide, voice = true }) {
+    const [localValue, setLocalValue] = useState("");
+    const isControlled = value !== undefined && onChange !== undefined;
+    const currentValue = isControlled ? value : localValue;
+    const handleChange = isControlled ? onChange : (e) => setLocalValue(e.target.value);
+    return (
+      <label style={{ flex: wide ? "1 1 100%" : "1 1 220px", marginBottom: 18, display: "block" }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>{label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input placeholder={placeholder} value={currentValue} onChange={handleChange} style={{
+            flex: 1, minWidth: 0, padding: "11px 14px", borderRadius: 11, border: `1.5px solid ${theme.line}`,
+            fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream,
+          }} />
+          {voice && (
+            <MicButton size={32} lang={speechLang} onResult={(t) => {
+              const next = currentValue ? `${currentValue} ${t}` : t;
+              handleChange({ target: { value: next } });
+            }} />
+          )}
+        </div>
+      </label>
+    );
+  }
 
   return (
     <div style={{ background: theme.cream, minHeight: "100%" }}>
@@ -49,7 +66,7 @@ export default function BusinessRegistrationPage({ goTo, businessName, setBusine
         <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.wine, letterSpacing: 1.5, textAlign: "center", marginBottom: 6 }}>YUUKKE SELLER ONBOARDING</p>
         <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 34, textAlign: "center", color: theme.ink, margin: "0 0 10px" }}>Register your business</h1>
         <p style={{ textAlign: "center", color: theme.inkSoft, fontSize: 14.5, marginBottom: 40, fontFamily: theme.fontBody }}>
-          Join thousands of women entrepreneurs selling on Yuukke's marketplace.
+          Join thousands of entrepreneurs selling on Yuukke's marketplace.
         </p>
 
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 44, position: "relative" }}>
@@ -98,8 +115,8 @@ export default function BusinessRegistrationPage({ goTo, businessName, setBusine
           )}
           {step === 3 && (
             <StepBlock icon={<Landmark size={18} />} title="Bank details for payouts">
-              <Row><Input label="Account holder name" placeholder="As per bank records" /><Input label="Account number" placeholder="0000 0000 0000" /></Row>
-              <Row><Input label="IFSC code" placeholder="e.g. HDFC0000123" /><Input label="Bank name" placeholder="e.g. HDFC Bank" /></Row>
+              <Row><Input label="Account holder name" placeholder="As per bank records" /><Input label="Account number" placeholder="0000 0000 0000" voice={false} /></Row>
+              <Row><Input label="IFSC code" placeholder="e.g. HDFC0000123" voice={false} /><Input label="Bank name" placeholder="e.g. HDFC Bank" /></Row>
             </StepBlock>
           )}
           {step === 4 && (
