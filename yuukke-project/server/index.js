@@ -4,7 +4,7 @@
 // the Tripo3D proxy, the product catalog, and real auth/cart/wishlist/order
 // storage (SQLite via server/db.js — see productStore.js for the
 // production-persistence caveat).
-import http from "node:http";
+import express from "express";
 import { proxyTripo, proxyTripoModel } from "./tripoProxy.js";
 import { listProducts, listProductsBySeller, getProduct, createProduct, updateProduct } from "./productStore.js";
 import * as auth from "./authStore.js";
@@ -534,7 +534,17 @@ async function handleTripo(req, res, url) {
   return true;
 }
 
-const server = http.createServer(async (req, res) => {
+const app = express();
+app.disable("x-powered-by");
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({ ok: true, service: "yuukke-api" });
+});
+
+// Express owns the HTTP lifecycle while the existing feature handlers retain
+// their small, tested request/response contract. Body parsing stays inside the
+// handlers because image, video and Tripo proxy routes also accept binary data.
+app.use(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (await handleTripo(req, res, url)) return;
@@ -555,7 +565,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`[dev-server] listening on http://localhost:${PORT}`);
   if (!process.env.TRIPO_API_KEY) {
     console.log("[dev-server] warning: TRIPO_API_KEY is not set — 3D preview requests will fail.");

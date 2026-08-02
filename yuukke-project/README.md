@@ -32,6 +32,26 @@ The storefront studio combines a live preview with editable colours, hero styles
 
 A customer-facing chatbot is intentionally not a manual checkbox on this page. The seller asks the website-design assistant to add, configure, disable or remove it; new storefronts start without one.
 
+#### Storefront widget details
+
+**Theme and layout controls**
+
+![Yuukke theme and layout controls](docs/screenshots/08-theme-and-layout-controls.png)
+
+The design widget provides accent colours, tagline editing, hero-style choices and section visibility. The live preview updates beside the controls so the seller can compare changes immediately.
+
+**Website identity, publishing and Postiz connection**
+
+![Yuukke website identity and Postiz widgets](docs/screenshots/09-website-identity-and-postiz.png)
+
+This area contains the business name, owner-written description, generated logo, public website publishing and social-channel connection. Postiz remains responsible for the final background delivery to connected social accounts.
+
+**AI social-post assistant**
+
+![Yuukke social-post assistant](docs/screenshots/10-social-post-assistant.png)
+
+The seller can type or speak a campaign idea, choose one of their real saved products and images, then request an image or video advertisement. Yuukke creates editable platform-specific drafts before anything enters the calendar.
+
 ### 5. Social content calendar and analytics
 
 ![Yuukke social calendar](docs/screenshots/05-social-calendar.png)
@@ -73,7 +93,7 @@ Accessibility tools remain available throughout the business workspace. They inc
 
 ### Backend and data layer
 
-- **Node.js HTTP server** with handlers for authentication, products, storefronts, cart, wishlist, orders, AI, social scheduling, and 3D generation.
+- **Express 5 on Node.js** provides the API server, health endpoint and HTTP lifecycle for authentication, products, storefronts, cart, wishlist, orders, AI, social scheduling, analytics and 3D generation.
 - **SQLite (`node:sqlite`)** with WAL mode and foreign keys for accounts, sessions, seller products, storefronts, carts, wishlists, orders, and social campaigns.
 - **Repository/store modules** isolate SQL and ownership rules for authentication, products, sites, posts, carts, wishlists, and orders.
 - **Authenticated seller boundaries** scope business data to the signed-in user and safely claim legacy browser data after login.
@@ -103,6 +123,25 @@ Accessibility tools remain available throughout the business workspace. They inc
 
 - [Node.js](https://nodejs.org/) 18 or later (tested on v24)
 - npm (comes with Node)
+
+## Express backend
+
+The local API runs on Express 5 through `npm run server`. Express owns the HTTP lifecycle while the existing feature handlers continue to manage authentication, products, storefronts, social posts, analytics, posters, orders and external AI/media integrations.
+
+The health endpoint is available at:
+
+```text
+GET http://localhost:8792/health
+```
+
+Expected response:
+
+```json
+{
+  "ok": true,
+  "service": "yuukke-api"
+}
+```
 
 ## 1. Install dependencies
 

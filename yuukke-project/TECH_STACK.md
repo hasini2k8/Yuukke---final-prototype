@@ -23,7 +23,7 @@ This document explains the technologies used by the Yuukke final prototype and w
 | Technology | Where it is used | Why it is used |
 |---|---|---|
 | Node.js | Local application server and integration layer | Uses the same JavaScript language as the frontend and supports native web APIs such as `fetch`, `FormData` and `Blob`. |
-| Native Node HTTP server | REST endpoints for accounts, products, sites, posts, analytics, posters, cart, wishlist and orders | Keeps the prototype lightweight and makes every request path explicit. |
+| Express 5 | REST API lifecycle, health checks and routing for accounts, products, sites, posts, analytics, posters, cart, wishlist and orders | Adds a familiar extensible backend foundation while preserving the project's explicit feature handlers and binary proxy support. |
 | Modular store layer | `authStore`, `productStore`, `siteStore`, `postStore`, `analyticsStore`, `posterStore` and commerce stores | Separates persistence and ownership rules from request handling. |
 | Server-side proxy modules | OpenAI, Postiz, Tripo3D and Google video calls | Keeps billable API keys outside the browser and normalizes external errors. |
 | Vercel serverless functions | OpenAI and Tripo routes prepared under `api/` | Provides deployable secret-holding endpoints for supported integrations. |
