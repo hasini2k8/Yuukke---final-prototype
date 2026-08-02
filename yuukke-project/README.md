@@ -105,7 +105,7 @@ Open the Vite URL printed in the terminal. Both processes need to be running for
 npm run build
 ```
 
-Output goes to `dist/`. For production, deploy this static frontend to Vercel and deploy `server/index.js` separately using the included Docker/Render configuration. Set `VITE_API_BASE_URL` to the external backend and `VITE_STOREFRONT_DOMAIN` to the wildcard storefront root domain. See [DEPLOYMENT.md](./DEPLOYMENT.md).
+Output goes to `dist/`. Note: the backend proxy (`server/index.js`) only runs locally — there's no production/serverless equivalent for it yet except the Tripo3D proxy (`api/tripo/[...path].js`, written for Vercel). Deploying the built frontend as-is means auth, cart, wishlist, orders, and the product catalog won't work until an equivalent backend is deployed too.
 
 ## Data storage
 

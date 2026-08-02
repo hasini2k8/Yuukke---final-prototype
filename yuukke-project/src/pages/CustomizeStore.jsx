@@ -15,7 +15,6 @@ import { fetchSite, saveSite } from "../lib/site";
 import { connectPlatform, fetchConnections, disconnectPlatform } from "../lib/social";
 import { fetchPosts } from "../lib/posts";
 import { EN_STRINGS } from "../lib/strings";
-import { storefrontUrl } from "../lib/storefrontDomain";
 
 const HERO_STYLES = ["minimal", "bold", "warm", "festive"];
 
@@ -402,10 +401,10 @@ Generated automatically above — Yuukke's AI names your business, writes its st
             {config.published && config.slug && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, background: theme.wineTint, borderRadius: 10, padding: "9px 12px", marginBottom: 20, flexWrap: "wrap" }}>
                 <Check size={14} color={theme.wine} />
-                <a href={storefrontUrl(config.slug)} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 700, color: theme.wine, textDecoration: "none" }}>
-                  {storefrontUrl(config.slug).replace(/^https?:\/\//, "")}
+                <a href={`/site/${config.slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 700, color: theme.wine, textDecoration: "none" }}>
+                  yuukke.app/site/{config.slug}
                 </a>
-                <button onClick={() => navigator.clipboard?.writeText(storefrontUrl(config.slug))} aria-label="Copy link" style={{ background: "none", border: "none", cursor: "pointer", color: theme.wine, padding: 2, marginLeft: "auto" }}>
+                <button onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/site/${config.slug}`)} aria-label="Copy link" style={{ background: "none", border: "none", cursor: "pointer", color: theme.wine, padding: 2, marginLeft: "auto" }}>
                   <Copy size={13} />
                 </button>
               </div>

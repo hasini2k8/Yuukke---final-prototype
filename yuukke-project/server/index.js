@@ -24,23 +24,7 @@ import { get, run } from "./db.js";
 
 const SOCIAL_PLATFORMS = new Set(["instagram", "linkedin"]);
 
-const PORT = process.env.PORT || process.env.TRIPO_PROXY_PORT || 8792;
-const FRONTEND_ORIGINS = new Set(String(process.env.FRONTEND_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
-const CORS_ROOT_DOMAIN = String(process.env.CORS_ROOT_DOMAIN || "").toLowerCase();
-
-function allowCors(req, res) {
-  const origin = req.headers.origin;
-  if (!origin) return;
-  let allowed = FRONTEND_ORIGINS.has(origin);
-  if (!allowed && CORS_ROOT_DOMAIN) {
-    try { const host = new URL(origin).hostname.toLowerCase(); allowed = host === CORS_ROOT_DOMAIN || host.endsWith(`.${CORS_ROOT_DOMAIN}`); } catch (e) { allowed = false; }
-  }
-  if (!allowed) return;
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Legacy-Seller-Id");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-}
+const PORT = process.env.TRIPO_PROXY_PORT || 8792;
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -551,11 +535,8 @@ async function handleTripo(req, res, url) {
 }
 
 const server = http.createServer(async (req, res) => {
-  allowCors(req, res);
-  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
-    if (url.pathname === "/health" && req.method === "GET") { sendJson(res, 200, { ok: true, service: "yuukke-backend" }); return; }
     if (await handleTripo(req, res, url)) return;
     if (await handleAuth(req, res, url)) return;
     if (await handleCart(req, res, url)) return;

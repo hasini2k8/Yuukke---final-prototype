@@ -1,8 +1,7 @@
 // Calls go through /api/tripo/* (see api/tripo/[...path].js) rather than
 // Tripo3D directly — Tripo3D's API sends no CORS headers, so a browser can't
 // call it cross-origin, and the API key must stay server-side.
-import { apiUrl } from "./api";
-const TRIPO_BASE = apiUrl("/api/tripo");
+const TRIPO_BASE = "/api/tripo";
 
 async function unwrap(response) {
   const data = await response.json().catch(() => null);

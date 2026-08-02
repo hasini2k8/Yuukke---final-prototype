@@ -26,8 +26,7 @@ This document explains the technologies used by the Yuukke final prototype and w
 | Native Node HTTP server | REST endpoints for accounts, products, sites, posts, analytics, posters, cart, wishlist and orders | Keeps the prototype lightweight and makes every request path explicit. |
 | Modular store layer | `authStore`, `productStore`, `siteStore`, `postStore`, `analyticsStore`, `posterStore` and commerce stores | Separates persistence and ownership rules from request handling. |
 | Server-side proxy modules | OpenAI, Postiz, Tripo3D and Google video calls | Keeps billable API keys outside the browser and normalizes external errors. |
-| Static Vercel deployment | Vite frontend and wildcard storefront subdomains | Serves every generated business website from one deployment without Vercel API functions or per-business deployments. |
-| External Dockerized Node service | Authentication, persistence, AI, social scheduling, analytics and media proxy routes | Keeps backend execution and secrets independent from Vercel and supports a persistent database disk. |
+| Vercel serverless functions | OpenAI and Tripo routes prepared under `api/` | Provides deployable secret-holding endpoints for supported integrations. |
 
 ## Database and persistence
 
@@ -40,7 +39,7 @@ This document explains the technologies used by the Yuukke final prototype and w
 | Daily analytics tables | Instagram metrics and public-storefront views | Retains historical performance so graphs and future marketing decisions survive refreshes. |
 | Product poster table | AI poster image, product relationship, prompt, format and creation date | Creates a reusable per-business marketing asset library. |
 
-SQLite is durable for local and single-server use. The included Render configuration mounts it on a persistent disk. If the backend later scales to multiple instances, migrate these tables to managed PostgreSQL.
+SQLite is durable for local and single-server use. A production serverless deployment should migrate these tables to managed PostgreSQL or another persistent hosted database because serverless local disks are not durable.
 
 ## Authentication and security
 

@@ -1,4 +1,3 @@
-import { apiUrl } from "./api";
 const TOKEN_KEY = "yuukke_token";
 
 export function getToken() {
@@ -22,7 +21,7 @@ function authHeaders() {
 }
 
 export async function signup({ email, password, businessName }) {
-  const res = await fetch(apiUrl("/api/auth/signup"), {
+  const res = await fetch("/api/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, businessName }),
@@ -33,7 +32,7 @@ export async function signup({ email, password, businessName }) {
 }
 
 export async function login({ email, password }) {
-  const res = await fetch(apiUrl("/api/auth/login"), {
+  const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -44,13 +43,13 @@ export async function login({ email, password }) {
 }
 
 export async function logout() {
-  await fetch(apiUrl("/api/auth/logout"), { method: "POST", headers: authHeaders() }).catch(() => {});
+  await fetch("/api/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
   setToken(null);
 }
 
 export async function getCurrentUser() {
   if (!getToken()) return null;
-  const res = await fetch(apiUrl("/api/auth/me"), { headers: authHeaders() });
+  const res = await fetch("/api/auth/me", { headers: authHeaders() });
   const data = await unwrap(res);
   return data.user;
 }
@@ -58,5 +57,5 @@ export async function getCurrentUser() {
 // Fetch wrapper that attaches the auth token — use for every /api/cart,
 // /api/wishlist, and /api/orders call.
 export function authFetch(url, opts = {}) {
-  return fetch(apiUrl(url), { ...opts, headers: { ...(opts.headers || {}), ...authHeaders() } });
+  return fetch(url, { ...opts, headers: { ...(opts.headers || {}), ...authHeaders() } });
 }

@@ -8,9 +8,8 @@ import StorefrontChatbot from "../components/StorefrontChatbot";
 
 const PLATFORM_ICONS = { instagram: Camera, linkedin: Briefcase };
 
-export default function GeneratedSitePage({ slugOverride = "" }) {
-  const { slug: routeSlug } = useParams();
-  const slug = slugOverride || routeSlug;
+export default function GeneratedSitePage() {
+  const { slug } = useParams();
   const [site, setSite] = useState(null);
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | missing
