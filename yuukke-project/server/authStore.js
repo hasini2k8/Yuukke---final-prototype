@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 import { get, run } from "./db.js";
 
+
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
 }

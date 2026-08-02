@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently -n vite,proxy -c blue,magenta \"vite\" \"npm run server\"",
     "vite": "vite",
-    "server": "node --env-file=.env server/index.js",
+    "server": "node --env-file-if-exists=.env server/index.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

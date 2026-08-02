@@ -22,7 +22,7 @@ function miniInput(bold) {
 
 export default function ListProductsPage({ goTo, products, setProducts, speechLang }) {
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! Tell me a bit about what you make or sell — you can type, or tap the mic and speak." },
+    { role: "assistant", content: "Hi! Tell me what you sell, then upload a clear product photo using the image button. I’ll use both to build the listing." },
   ]);
   const [input, setInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -34,6 +34,7 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
   const [openDetailIndex, setOpenDetailIndex] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [pendingImage, setPendingImage] = useState("");
   const scrollRef = useRef(null);
   const imageInputRef = useRef(null);
   const voiceSupported = isVoiceInputSupported();
@@ -90,8 +91,17 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
+      setPendingImage(dataUrl);
       const id = crypto.randomUUID();
-      setMessages((m) => [...m, { id, role: "photo-insight", image: dataUrl, text: "", status: "analyzing" }]);
+      setMessages((m) => [...m, { role: "assistant", content: "Photo received. I’ll attach it to this listing and analyze its visible selling points." }, { id, role: "photo-insight", image: dataUrl, text: "", status: "analyzing" }]);
+      const target = [...draft].reverse().find((item) => item.id && !item.imagePreview);
+      if (target) {
+        updateProduct(target.id, { imagePreview: dataUrl }).then((updated) => {
+          setDraft((items) => items.map((item) => item.id === target.id ? updated : item));
+          setProducts((items) => items.map((item) => item.id === target.id ? updated : item));
+          setPendingImage("");
+        }).catch(() => {});
+      }
       analyzePhoto(id, dataUrl);
     };
     reader.readAsDataURL(file);
@@ -169,15 +179,17 @@ export default function ListProductsPage({ goTo, products, setProducts, speechLa
       if (!item?.name?.trim()) continue;
       const existing = draft.find((d) => d.name && d.name.trim().toLowerCase() === item.name.trim().toLowerCase());
       if (!existing) {
-        saveProduct(item).then((created) => {
+        saveProduct({ ...item, imagePreview: pendingImage || item.imagePreview || null }).then((created) => {
           setDraft((cur) => (cur.some((d) => d.id === created.id) ? cur : [...cur, created]));
           setProducts((prev) => [...prev, created]);
+          if (pendingImage) setPendingImage("");
         }).catch(() => {});
       } else if (existing.id && (existing.description !== item.description || existing.category !== item.category || Number(existing.price) !== Number(item.price))) {
-        const patch = { name: item.name, category: item.category, price: item.price, description: item.description };
+        const patch = { name: item.name, category: item.category, price: item.price, description: item.description, ...(pendingImage && !existing.imagePreview ? { imagePreview: pendingImage } : {}) };
         updateProduct(existing.id, patch).then((updated) => {
           setDraft((cur) => cur.map((d) => (d.id === existing.id ? { ...d, ...updated } : d)));
           setProducts((prev) => prev.map((p) => (p.id === existing.id ? { ...p, ...updated } : p)));
+          if (pendingImage) setPendingImage("");
         }).catch(() => {});
       }
     }

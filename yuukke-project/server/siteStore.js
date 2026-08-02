@@ -3,10 +3,9 @@
 // (src/lib/sellerId.js), not an account. See productStore.js for the
 // production-persistence caveat.
 //
-// `connections` and `zernioProfileId` are the seller's Zernio-backed social
-// state (server/zernioClient.js) — Zernio itself holds the real OAuth
-// tokens; this just remembers which of its profile's connected platforms
-// belong to this seller and what their handle is.
+// `connections` stores the Postiz integration selected for each platform.
+// Postiz retains the actual provider credentials; Yuukke stores only the
+// integration id and display handle.
 import crypto from "node:crypto";
 import { get, run } from "./db.js";
 
@@ -36,7 +35,6 @@ function toSite(row) {
     slug: row.slug || "",
     published: !!row.published,
     connections: row.connections ? JSON.parse(row.connections) : {},
-    zernioProfileId: row.zernio_profile_id || null,
     brandGuidelines: row.brand_guidelines ? JSON.parse(row.brand_guidelines) : null,
     characters: row.characters ? JSON.parse(row.characters) : [],
     createdAt: row.created_at,
@@ -61,14 +59,14 @@ export async function saveSite(sellerId, patch) {
   if (!merged.createdAt) merged.createdAt = now;
 
   run(
-    `INSERT INTO sites (seller_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, zernio_profile_id, brand_guidelines, characters, created_at, updated_at)
-     VALUES (@seller_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @zernio_profile_id, @brand_guidelines, @characters, @created_at, @updated_at)
+    `INSERT INTO sites (seller_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, brand_guidelines, characters, created_at, updated_at)
+     VALUES (@seller_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @brand_guidelines, @characters, @created_at, @updated_at)
      ON CONFLICT(seller_id) DO UPDATE SET
        business_name = excluded.business_name, tagline = excluded.tagline, about = excluded.about,
        category = excluded.category, accent_color = excluded.accent_color, hero_style = excluded.hero_style,
        sections = excluded.sections, is_tech = excluded.is_tech, logo_prompt = excluded.logo_prompt,
        logo_data_url = excluded.logo_data_url, slug = excluded.slug, published = excluded.published,
-       connections = excluded.connections, zernio_profile_id = excluded.zernio_profile_id,
+       connections = excluded.connections,
        brand_guidelines = excluded.brand_guidelines,
        characters = excluded.characters, updated_at = excluded.updated_at`,
     {
@@ -86,7 +84,6 @@ export async function saveSite(sellerId, patch) {
       slug: merged.slug || null,
       published: merged.published ? 1 : 0,
       connections: JSON.stringify(merged.connections || {}),
-      zernio_profile_id: merged.zernioProfileId || null,
       brand_guidelines: merged.brandGuidelines ? JSON.stringify(merged.brandGuidelines) : null,
       characters: merged.characters ? JSON.stringify(merged.characters) : null,
       created_at: merged.createdAt,

@@ -113,11 +113,8 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 `);
 
-// Instagram/LinkedIn OAuth now goes through Zernio (server/zernioClient.js)
-// — it holds the real tokens on its side, keyed by its own opaque
-// zernio_profile_id (a new column on sites, added below) and a
-// per-platform record in sites.connections. The old direct-OAuth token
-// tables are no longer needed.
+// Provider credentials live in Postiz; Yuukke stores selected Postiz
+// integration ids in sites.connections. Old direct-OAuth tables are unused.
 db.exec("DROP TABLE IF EXISTS social_connections;");
 db.exec("DROP TABLE IF EXISTS oauth_states;");
 
@@ -135,7 +132,18 @@ function addColumnIfMissing(table, column, definition) {
 addColumnIfMissing("posts", "topic", "TEXT");
 addColumnIfMissing("posts", "scheduled_time", "TEXT");
 addColumnIfMissing("posts", "video_url", "TEXT");
-addColumnIfMissing("sites", "zernio_profile_id", "TEXT");
+addColumnIfMissing("posts", "campaign_id", "TEXT");
+addColumnIfMissing("posts", "calendar_number", "INTEGER");
+
+db.exec(`
+UPDATE posts
+SET calendar_number = (
+  SELECT COUNT(*) FROM posts AS earlier
+  WHERE earlier.seller_id = posts.seller_id
+    AND (earlier.created_at < posts.created_at OR (earlier.created_at = posts.created_at AND earlier.id <= posts.id))
+)
+WHERE calendar_number IS NULL;
+`);
 
 // Prepared-statement params can be positional (an array, for "?" placeholders)
 // or named (a plain object, for "@name" placeholders) — node:sqlite's

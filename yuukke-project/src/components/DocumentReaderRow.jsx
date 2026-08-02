@@ -12,7 +12,7 @@ const SYSTEM_PROMPT =
 // language and pulls out the key details, for sellers who find dense
 // government paperwork hard to read or verify themselves.
 export default function DocumentReaderRow({ label, speechLang }) {
-  const [status, setStatus] = useState("idle"); // idle | analyzing | done | error
+  const [status, setStatus] = useState("idle"); // idle | analyzing | done | uploaded | error
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -35,8 +35,14 @@ export default function DocumentReaderRow({ label, speechLang }) {
         setResult(data);
         setStatus("done");
       } catch (err) {
-        setErrorMsg(err.message || "Couldn't read that document just now.");
-        setStatus("error");
+        const message = err.message || "Couldn't read that document just now.";
+        if (message.includes("OPENAI_API_KEY")) {
+          setErrorMsg("Document uploaded. Optional AI reading is unavailable until an OpenAI API key is configured.");
+          setStatus("uploaded");
+        } else {
+          setErrorMsg(message);
+          setStatus("error");
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -65,6 +71,13 @@ export default function DocumentReaderRow({ label, speechLang }) {
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10, background: "#fdf0ea", borderRadius: 10, padding: 10 }}>
           <AlertTriangle size={13} color="#a3512c" style={{ marginTop: 1, flexShrink: 0 }} />
           <p style={{ fontSize: 11.5, color: "#7a3a1f", margin: 0, lineHeight: 1.5 }}>{errorMsg}</p>
+        </div>
+      )}
+
+      {status === "uploaded" && (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10, background: "#eaf5ee", borderRadius: 10, padding: 10 }}>
+          <CheckCircle2 size={13} color="#2c6e49" style={{ marginTop: 1, flexShrink: 0 }} />
+          <p style={{ fontSize: 11.5, color: "#24583b", margin: 0, lineHeight: 1.5 }}>{errorMsg}</p>
         </div>
       )}
 

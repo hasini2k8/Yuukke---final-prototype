@@ -4,6 +4,8 @@
 // buyer marketplace's real login (src/lib/auth.js), there's no password
 // behind this: anyone who obtains the id can act as that seller. That's an
 // intentional simplicity tradeoff, not an oversight — see the plan notes.
+import { authFetch } from "./auth";
+
 const SELLER_ID_KEY = "yuukke_seller_id";
 
 export function getSellerId() {
@@ -19,5 +21,8 @@ export function getSellerId() {
 // /api/site, /api/posts, /api/social, and product-write call. Buyer calls
 // (/api/cart, /api/wishlist, /api/orders) keep using authFetch (src/lib/auth.js).
 export function sellerFetch(url, opts = {}) {
-  return fetch(url, { ...opts, headers: { ...(opts.headers || {}), "X-Seller-Id": getSellerId() } });
+  return authFetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || {}), "X-Legacy-Seller-Id": getSellerId() },
+  });
 }

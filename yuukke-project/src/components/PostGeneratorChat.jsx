@@ -16,14 +16,43 @@ const PLATFORM_LABEL = { instagram: "Instagram", linkedin: "LinkedIn" };
 // lands the result as "pending" (server/postStore.js) rather than
 // immediately slotting it onto the calendar — the seller reviews, deletes,
 // and selects which ones to submit in the GeneratedPostsPanel next to this.
-export default function PostGeneratorChat({ config, speechLang, onPostsGenerated }) {
+export default function PostGeneratorChat({ config, products = [], speechLang, onPostsGenerated }) {
   const [messages, setMessages] = useState([
-    { role: "assistant", content: 'What should this post be about? e.g. "Diwali sale announcement" or "new arrivals".' },
+    { role: "assistant", content: "Which product would you like to advertise? Choose its image below, or type or speak the product name from your listings." },
   ]);
-  const [step, setStep] = useState("topic"); // topic | format | generating
+  const [step, setStep] = useState("product"); // product | topic | format | generating
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [topic, setTopic] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+
+  function chooseProduct(product) {
+    if (!product || busy) return;
+    setSelectedProduct(product);
+    setInput("");
+    setMessages((m) => [...m,
+      { role: "user", content: product.name },
+      { role: "assistant", content: `Great — I’ll advertise ${product.name}. What should the post say or focus on?` },
+    ]);
+    setStep("topic");
+  }
+
+  function submitProduct() {
+    const value = input.trim();
+    if (!value || busy) return;
+    const normalized = value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
+    const byName = products.find((product) => {
+      const name = String(product.name || "").toLowerCase();
+      return name === normalized || normalized.includes(name) || name.includes(normalized);
+    });
+    const match = byName;
+    if (match) return chooseProduct(match);
+    setMessages((m) => [...m,
+      { role: "user", content: value },
+      { role: "assistant", content: "I couldn’t match that to your catalogue. Please choose an image or say the product name shown below." },
+    ]);
+    setInput("");
+  }
 
   function submitTopic() {
     if (!input.trim() || busy) return;
@@ -52,22 +81,27 @@ export default function PostGeneratorChat({ config, speechLang, onPostsGenerated
         `Business: ${config.businessName || "this business"}`,
         `Tagline: ${config.tagline || ""}`,
         `Category: ${config.category || ""}`,
+        `Product name: ${selectedProduct?.name || ""}`,
+        `Product category: ${selectedProduct?.category || ""}`,
+        `Product description: ${selectedProduct?.description || ""}`,
+        `Product price: ${selectedProduct?.price || ""}`,
         `Target platforms: ${POST_PLATFORMS.join(", ")}`,
         `Post theme: ${topic}`,
       ].filter(Boolean).join("\n");
       const { captions, imagePrompts } = await askOpenAIJSON(MULTI_PLATFORM_POST_SYSTEM_PROMPT, context);
+      const campaignId = crypto.randomUUID();
       // A separate image per platform, not one shared graphic — Instagram
       // and LinkedIn get genuinely different visuals to match their own
       // caption's tone, generated in parallel rather than reusing one image.
-      const imagesByPlatform = Object.fromEntries(
-        await Promise.all(POST_PLATFORMS.map(async (platform) => {
-          const prompt = imagePrompts?.[platform] || imagePrompts?.[Object.keys(imagePrompts || {})[0]] || topic;
-          return [platform, await generateImage(prompt)];
-        }))
-      );
+      const productImage = selectedProduct?.imagePreview || selectedProduct?.imageDataUrl || "";
+      const imagesByPlatform = Object.fromEntries(await Promise.all(POST_PLATFORMS.map(async (platform) => {
+        const visualDirection = imagePrompts?.[platform] || imagePrompts?.[Object.keys(imagePrompts || {})[0]] || topic;
+        const prompt = `Create a polished square ${PLATFORM_LABEL[platform]} advertisement for the real product "${selectedProduct?.name}". ${visualDirection}. Use the supplied product photo as the source of truth: keep the product itself recognizable and do not replace it with a different product. Create an attractive branded advertising composition around it. Do not add illegible text or invent product claims.`;
+        return [platform, await generateImage(prompt, productImage)];
+      })));
       let created = await Promise.all(
         POST_PLATFORMS.map((platform) => createPost({
-          platform, topic, caption: captions?.[platform] || captions?.[Object.keys(captions)[0]] || "",
+          platform, campaignId, topic: `${selectedProduct?.name || "Product"}: ${topic}`, caption: captions?.[platform] || captions?.[Object.keys(captions)[0]] || "",
           imageDataUrl: imagesByPlatform[platform], status: "pending",
         }))
       );
@@ -92,14 +126,15 @@ export default function PostGeneratorChat({ config, speechLang, onPostsGenerated
       setMessages((m) => [
         ...m,
         { role: "assistant", content: "Here's what I made — review it in the panel to the right, then select and submit whichever you'd like on the calendar.", posts: created },
-        { role: "assistant", content: "Want to draft another post? What should it be about?" },
+        { role: "assistant", content: "Want to draft another post? Choose another product image, or type or speak its listing name." },
       ]);
       onPostsGenerated(created);
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", content: e.message || "Sorry, something went wrong generating that — want to try again?" }]);
     } finally {
       setBusy(false);
-      setStep("topic");
+      setSelectedProduct(null);
+      setStep("product");
     }
   }
 
@@ -107,7 +142,7 @@ export default function PostGeneratorChat({ config, speechLang, onPostsGenerated
     <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
       <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 4 }}>Create a social post</p>
       <p style={{ fontSize: 12, color: theme.inkSoft, marginBottom: 16, lineHeight: 1.5 }}>
-        Talk it through — tell it the topic, choose image or video reel, and it drafts an Instagram and a LinkedIn version at once. Nothing goes on your calendar until you pick which ones to submit, in the panel to the right.
+        Choose any product from your catalogue by image, typing, or voice. The assistant uses that product's image and listing details to draft Instagram and LinkedIn versions.
       </p>
 
       <div style={{ maxHeight: 260, overflowY: "auto", marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -135,6 +170,28 @@ export default function PostGeneratorChat({ config, speechLang, onPostsGenerated
         ))}
         {busy && <div style={{ display: "flex", alignItems: "center", gap: 6, color: theme.inkSoft, fontSize: 12 }}><Spinner size={12} /> Working…</div>}
       </div>
+
+      {step === "product" && !busy && (
+        <>
+          {products.length ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 9, marginBottom: 12 }}>
+              {products.map((product, index) => (
+                <button key={product.id || index} onClick={() => chooseProduct(product)} style={{ padding: 0, overflow: "hidden", borderRadius: 10, border: `1.5px solid ${theme.line}`, background: theme.white, cursor: "pointer", textAlign: "left" }}>
+                  <PostThumb imageDataUrl={product.imagePreview || product.imageDataUrl} height={82} radius={0} />
+                  <span style={{ display: "block", padding: "7px 8px", fontSize: 11, fontWeight: 700, color: theme.ink }}>{product.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: 12, color: theme.inkSoft }}>Add a product listing with an image first, then it will appear here.</p>
+          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submitProduct(); }} disabled={!products.length} placeholder="Say or type the product name from your listings" style={{ flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${theme.line}`, fontSize: 13, fontFamily: theme.fontBody, outline: "none", background: theme.cream }} />
+            <MicButton size={36} lang={speechLang} onResult={(t) => setInput(t)} disabled={!products.length} />
+            <button onClick={submitProduct} disabled={!input.trim() || !products.length} aria-label="Choose product" style={{ display: "flex", alignItems: "center", background: theme.wine, color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", opacity: !input.trim() || !products.length ? .5 : 1 }}><Send size={13} /></button>
+          </div>
+        </>
+      )}
 
       {step === "format" && !busy && (
         <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>

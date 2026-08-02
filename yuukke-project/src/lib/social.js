@@ -1,7 +1,5 @@
-// Talks to this app's Zernio-backed Instagram/LinkedIn connection
-// (server/zernioClient.js) — Zernio owns the actual OAuth in its own hosted
-// login page. Scoped per seller's anonymous id (src/lib/sellerId.js) — no
-// login involved.
+// Selects Instagram/LinkedIn channels already connected in Postiz. All
+// requests remain scoped to the authenticated Yuukke seller.
 import { sellerFetch } from "./sellerId";
 
 async function unwrap(response) {
@@ -16,7 +14,7 @@ async function unwrap(response) {
 // seller logs in the normal way on that platform's own site, and our
 // server's /callback route stores the connection once they're done.
 export async function connectPlatform(platform) {
-  const res = await sellerFetch(`/api/social/${platform}/connect`);
+  const res = await sellerFetch(`/api/social/${platform}/connect`, { method: "POST" });
   return unwrap(res);
 }
 

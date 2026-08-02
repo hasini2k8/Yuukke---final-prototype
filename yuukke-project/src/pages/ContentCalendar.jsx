@@ -14,7 +14,7 @@ import { askOpenAIJSON, askOpenAIChat, generateImage, PLATFORM_SUGGESTION_SYSTEM
 import { fetchSite } from "../lib/site";
 import { connectPlatform, fetchConnections } from "../lib/social";
 import { fetchMyProducts } from "../lib/products";
-import { fetchPosts, updatePost, confirmPost, deletePost, checkPostStatus } from "../lib/posts";
+import { fetchPosts, updatePost, confirmPost, confirmPosts, deletePost, checkPostStatus } from "../lib/posts";
 import { istTodayIso, istDateOffset, istWeekStart, istWeekdayName, istWeekdayShort, istMonthDay, formatTime } from "../lib/istDate";
 import { EN_STRINGS } from "../lib/strings";
 
@@ -39,6 +39,9 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
   const [suggestingId, setSuggestingId] = useState("");
   const [connectedPlatforms, setConnectedPlatforms] = useState([]);
   const [previewPost, setPreviewPost] = useState(null);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [scheduleBusy, setScheduleBusy] = useState(false);
   const [confirmingPost, setConfirmingPost] = useState(null);
   const [connectingPlatform, setConnectingPlatform] = useState("");
 
@@ -86,9 +89,15 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
   // Stable numbering across the whole list (not just the visible week) so a
   // seller can say "move post 3" and mean the same post regardless of which
   // week is currently showing.
-  const orderedPosts = useMemo(() => [...posts].sort((a, b) => (a.scheduledFor + a.scheduledTime).localeCompare(b.scheduledFor + b.scheduledTime)), [posts]);
-  const postNumbers = useMemo(() => Object.fromEntries(orderedPosts.map((p, i) => [p.id, i + 1])), [orderedPosts]);
+  const orderedPosts = useMemo(() => [...posts].sort((a, b) => (a.calendarNumber || 0) - (b.calendarNumber || 0)), [posts]);
+  const postNumbers = useMemo(() => Object.fromEntries(orderedPosts.map((p, i) => [p.id, p.calendarNumber || i + 1])), [orderedPosts]);
   const todayIso = istTodayIso();
+
+  useEffect(() => {
+    if (!previewPost) return;
+    setScheduleDate(previewPost.scheduledFor || istTodayIso());
+    setScheduleTime(previewPost.scheduledTime || "09:00");
+  }, [previewPost?.id]);
 
   async function suggestPlatformFor(product) {
     if (suggestions[product.id] || suggestingId) return;
@@ -165,14 +174,11 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
   // decided from the preview that they want to actually post.
   async function connectFromConfirm(platform) {
     setConnectingPlatform(platform);
-    const tab = window.open("", "_blank");
-    if (tab) tab.opener = null;
     try {
-      const { url } = await connectPlatform(platform);
-      if (tab) tab.location.href = url;
-      else window.open(url, "_blank", "noopener,noreferrer");
+      await connectPlatform(platform);
+      await refreshConnectionsForConfirm();
     } catch (e) {
-      tab?.close();
+      setEditError((errors) => ({ ...errors, connection: e.message || "Couldn't connect that Postiz channel." }));
     } finally {
       setConnectingPlatform("");
     }
@@ -196,6 +202,35 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
     }
   }
 
+
+  async function doConfirmCampaign(campaignPosts) {
+    setConfirmingPost(null);
+    const updated = await confirmPosts(campaignPosts.map((post) => post.id)).catch((e) => {
+      setEditError((errors) => ({ ...errors, campaign: e.message || "Couldn't schedule those posts." }));
+      return null;
+    });
+    if (updated) {
+      const byId = Object.fromEntries(updated.map((post) => [post.id, post]));
+      setPosts((current) => current.map((post) => byId[post.id] || post));
+      setPreviewPost((post) => post && (byId[post.id] || post));
+    }
+  }
+
+  async function saveSchedule(post) {
+    if (!scheduleDate || scheduleBusy || post.status !== "draft") return;
+    setScheduleBusy(true);
+    setEditError((errors) => ({ ...errors, [post.id]: "" }));
+    try {
+      const updated = await updatePost(post.id, { scheduledFor: scheduleDate, scheduledTime: scheduleTime });
+      setPosts((current) => current.map((item) => item.id === post.id ? updated : item));
+      setPreviewPost(updated);
+    } catch (e) {
+      setEditError((errors) => ({ ...errors, [post.id]: e.message || "Couldn't move that post." }));
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
   async function remove(id) {
     await deletePost(id).catch(() => {});
     setPosts((p) => p.filter((x) => x.id !== id));
@@ -212,7 +247,7 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
     setMoveInput("");
     setMoveBusy(true);
     try {
-      const listing = orderedPosts.map((p) => `#${postNumbers[p.id]}: ${p.topic || "Untitled"} (${p.platform}) — currently ${p.scheduledFor}`).join("\n");
+      const listing = orderedPosts.map((p) => `#${postNumbers[p.id]}: ${p.topic || "Untitled"} (${p.platform}) — currently ${p.scheduledFor} at ${p.scheduledTime || "09:00"} IST`).join("\n");
       const context = `Today's date: ${todayIso} (IST)\n\nVisible posts:\n${listing || "(none yet)"}\n\nInstruction: "${instruction}"`;
       const result = await askOpenAIJSON(MOVE_POST_SYSTEM_PROMPT, context);
       const target = orderedPosts.find((p) => postNumbers[p.id] === result.postNumber);
@@ -220,9 +255,10 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
         setMoveMessages((m) => [...m, { role: "assistant", content: "I couldn't tell which post or date you meant — try naming the post number and a specific day." }]);
         return;
       }
-      const updated = await updatePost(target.id, { scheduledFor: result.newDate });
+      const newTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(result.newTime || "") ? result.newTime : target.scheduledTime;
+      const updated = await updatePost(target.id, { scheduledFor: result.newDate, scheduledTime: newTime });
       setPosts((p) => p.map((x) => (x.id === target.id ? updated : x)));
-      setMoveMessages((m) => [...m, { role: "assistant", content: `Moved post #${result.postNumber} to ${istWeekdayName(result.newDate)}, ${istMonthDay(result.newDate)}.` }]);
+      setMoveMessages((m) => [...m, { role: "assistant", content: `Moved post #${result.postNumber} to ${istWeekdayName(result.newDate)}, ${istMonthDay(result.newDate)} at ${formatTime(newTime)} IST.` }]);
       setWeekStart(istWeekStart(result.newDate));
     } catch (e) {
       setMoveMessages((m) => [...m, { role: "assistant", content: "Sorry, I couldn't make that change just now — could you try again?" }]);
@@ -350,7 +386,7 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
 
       <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 20 }}>
         <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 4 }}>Move a post</p>
-        <p style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 12 }}>Tell it which post and which day — by voice or typing.</p>
+        <p style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 12 }}>Every calendar post is numbered. Tell the AI the post number and new date/time, by voice or typing.</p>
         <div style={{ maxHeight: 160, overflowY: "auto", marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
           {moveMessages.map((m, i) => (
             <p key={i} style={{
@@ -368,7 +404,7 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
             value={moveInput}
             onChange={(e) => setMoveInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") runMoveCommand(moveInput); }}
-            placeholder="e.g. move post 3 to Friday"
+            placeholder="e.g. move post 3 to Friday at 4:30 PM"
             style={{ flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${theme.line}`, fontSize: 13, fontFamily: theme.fontBody, outline: "none", background: theme.cream }}
           />
           <MicButton size={36} lang={speechLang} onResult={(t) => runMoveCommand(t)} />
@@ -393,6 +429,18 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
               </span>
               <button onClick={() => setPreviewPost(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#fff" }}><X size={18} /></button>
             </div>
+
+            {previewPost.status === "draft" && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", width: "100%", background: "rgba(255,255,255,.12)", borderRadius: 10, padding: 10 }}>
+                <input type="date" min={istTodayIso()} value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} aria-label="Move post to date" style={{ padding: "7px 9px", borderRadius: 7, border: "none", fontFamily: theme.fontBody }} />
+                <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} aria-label="Move post to time" style={{ padding: "7px 9px", borderRadius: 7, border: "none", fontFamily: theme.fontBody }} />
+                <button onClick={() => saveSchedule(previewPost)} disabled={scheduleBusy} style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: theme.wine, color: "#fff", fontWeight: 800, fontSize: 11.5, cursor: "pointer" }}>
+                  {scheduleBusy ? "Moving…" : "Move post"}
+                </button>
+                <span style={{ fontSize: 10.5, color: "rgba(255,255,255,.8)" }}>IST</span>
+                {editError[previewPost.id] && <span style={{ width: "100%", fontSize: 11, color: "#ffd6d6" }}>{editError[previewPost.id]}</span>}
+              </div>
+            )}
 
             <div style={{ background: "#fff", borderRadius: 14, padding: 14, width: "100%" }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: theme.inkSoft, letterSpacing: 0.5, margin: "0 0 4px" }}>TOPIC</p>
@@ -467,20 +515,32 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
         }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: theme.white, borderRadius: 16, padding: 24, maxWidth: 380 }}>
-            {connectedPlatforms.includes(confirmingPost.platform) ? (
+            {(() => {
+              const campaignPosts = confirmingPost.campaignId
+                ? posts.filter((post) => post.campaignId === confirmingPost.campaignId && post.status === "draft")
+                : [confirmingPost];
+              const canPublishCampaign = campaignPosts.length > 1 && campaignPosts.every((post) => connectedPlatforms.includes(post.platform));
+              return connectedPlatforms.includes(confirmingPost.platform) ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <AlertTriangle size={18} color={theme.wine} />
                   <p style={{ fontSize: 14.5, fontWeight: 700, color: theme.ink, margin: 0 }}>Post this for real?</p>
                 </div>
                 <p style={{ fontSize: 13, color: theme.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
-                  This will publish to {PLATFORM_META[confirmingPost.platform]?.label || confirmingPost.platform} on{" "}
-                  {istWeekdayName(confirmingPost.scheduledFor)}, {istMonthDay(confirmingPost.scheduledFor)} at {formatTime(confirmingPost.scheduledTime)} IST.
+                  {canPublishCampaign
+                    ? `You can submit the Instagram and LinkedIn versions together. Each will publish at the date and time shown on its calendar card.`
+                    : `This will publish to ${PLATFORM_META[confirmingPost.platform]?.label || confirmingPost.platform} on ${istWeekdayName(confirmingPost.scheduledFor)}, ${istMonthDay(confirmingPost.scheduledFor)} at ${formatTime(confirmingPost.scheduledTime)} IST.`}
                   This can't be undone once it's live.
                 </p>
+                {editError.campaign && <p style={{ color: "#a32d2d", fontSize: 12, marginBottom: 12 }}>{editError.campaign}</p>}
                 <div style={{ display: "flex", gap: 10 }}>
+                  {canPublishCampaign && (
+                    <button onClick={() => doConfirmCampaign(campaignPosts)} style={{ flex: 1, background: theme.wine, color: "#fff", border: "none", borderRadius: 10, padding: "10px 8px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                      Post to both
+                    </button>
+                  )}
                   <button onClick={() => doConfirmSubmit(confirmingPost)} style={{ flex: 1, background: theme.wine, color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    Yes, post it
+                    {canPublishCampaign ? `Only ${PLATFORM_META[confirmingPost.platform]?.label}` : "Yes, post it"}
                   </button>
                   <button onClick={() => setConfirmingPost(null)} style={{ flex: 1, background: "none", border: `1.5px solid ${theme.line}`, color: theme.ink, borderRadius: 10, padding: "10px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     Not yet
@@ -493,8 +553,9 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
                   Connect {PLATFORM_META[confirmingPost.platform]?.label || confirmingPost.platform} first
                 </p>
                 <p style={{ fontSize: 13, color: theme.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
-                  You've seen how it looks — now connect your account so this can actually post there. One click, handled by Zernio's hosted login, no passwords shared with Yuukke.
+                  Connect the matching channel in Postiz first. Yuukke will then schedule approved content through your Postiz subscription.
                 </p>
+                {editError.connection && <p style={{ color: "#a32d2d", fontSize: 12, marginBottom: 12 }}>{editError.connection}</p>}
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={() => connectFromConfirm(confirmingPost.platform)} disabled={connectingPlatform === confirmingPost.platform} style={{
                     flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: theme.wine, color: "#fff",
@@ -507,7 +568,7 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
                   </button>
                 </div>
               </>
-            )}
+            ); })()}
           </div>
         </div>
       )}

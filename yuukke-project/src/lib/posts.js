@@ -52,6 +52,15 @@ export async function confirmPost(id) {
   return unwrap(res);
 }
 
+export async function confirmPosts(ids) {
+  const res = await sellerFetch("/api/posts/confirm-many", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+  return unwrap(res);
+}
+
 export async function deletePost(id) {
   const res = await sellerFetch(`/api/posts/${id}`, { method: "DELETE" });
   return unwrap(res);

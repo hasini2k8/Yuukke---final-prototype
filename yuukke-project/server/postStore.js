@@ -14,6 +14,8 @@ function toPost(row) {
   return {
     id: row.id,
     sellerId: row.seller_id,
+    campaignId: row.campaign_id || null,
+    calendarNumber: row.calendar_number || null,
     platform: row.platform,
     topic: row.topic || "",
     caption: row.caption || "",
@@ -37,9 +39,12 @@ export async function getPost(sellerId, id) {
 }
 
 export async function createPost(sellerId, data) {
+  const numberRow = get("SELECT COALESCE(MAX(calendar_number), 0) + 1 AS next_number FROM posts WHERE seller_id = ?", [sellerId]);
   const post = {
     id: crypto.randomUUID(),
     sellerId,
+    campaignId: data.campaignId || null,
+    calendarNumber: numberRow.next_number,
     platform: String(data.platform || "").trim(),
     topic: String(data.topic || "").trim(),
     caption: String(data.caption || "").trim(),
@@ -55,9 +60,9 @@ export async function createPost(sellerId, data) {
     createdAt: new Date().toISOString(),
   };
   run(
-    `INSERT INTO posts (id, seller_id, platform, topic, caption, image_data_url, scheduled_for, scheduled_time, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [post.id, post.sellerId, post.platform, post.topic, post.caption, post.imageDataUrl, post.scheduledFor, post.scheduledTime, post.status, post.createdAt]
+    `INSERT INTO posts (id, seller_id, campaign_id, calendar_number, platform, topic, caption, image_data_url, scheduled_for, scheduled_time, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [post.id, post.sellerId, post.campaignId, post.calendarNumber, post.platform, post.topic, post.caption, post.imageDataUrl, post.scheduledFor, post.scheduledTime, post.status, post.createdAt]
   );
   return post;
 }

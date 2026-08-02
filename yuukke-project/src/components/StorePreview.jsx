@@ -26,7 +26,7 @@ export default function StorePreview({ storeConfig, products, compact }) {
           {items.slice(0, compact ? 3 : 6).map((p, i) => (
             <div key={i} style={{ border: `1px solid ${theme.line}`, borderRadius: 12, padding: 14 }}>
               <div style={{ width: "100%", aspectRatio: "1", background: theme.creamDark, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: theme.inkSoft, marginBottom: 10 }}>
-                <Sparkles size={18} />
+                {p.imagePreview ? <img src={p.imagePreview} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }} /> : <Sparkles size={18} />}
               </div>
               <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, margin: "0 0 4px" }}>{p.name}</p>
               <p style={{ fontSize: 12, color: theme.inkSoft, margin: 0 }}>₹{Number(p.price || 0).toLocaleString("en-IN")}</p>

@@ -1,0 +1,9 @@
+{
+  "name": "yuukke-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix yuukke-project run dev",
+    "build": "npm --prefix yuukke-project run build",
+    "lint": "npm --prefix yuukke-project run lint"
+  }
+}

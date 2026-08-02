@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { ArrowRight, ChevronDown, LogIn, Gift, ShoppingBag, Users, Layers, GraduationCap, Wallet, Sparkles } from "lucide-react";
 import { theme, ACCENTS } from "../theme";
 import { Logo, Pill } from "../components/Shared";
+import AccountMenu from "../components/AccountMenu";
+import { useAuth } from "../components/AuthContext";
 
 const navLink = { fontSize: 13.5, fontWeight: 600, color: theme.ink, cursor: "pointer", fontFamily: theme.fontBody, textDecoration: "none" };
 
@@ -43,6 +45,7 @@ const STATS = [
 
 export default function HomePage({ goTo, openLogin }) {
   const [role, setRole] = useState("backer"); // builder | backer
+  const { user } = useAuth();
 
   return (
     <div style={{ background: theme.cream, minHeight: "100vh" }}>
@@ -56,9 +59,11 @@ export default function HomePage({ goTo, openLogin }) {
           <a href="/become-mentor" style={navLink}>Become a Mentor</a>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span onClick={openLogin} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, fontWeight: 600, color: theme.ink, cursor: "pointer" }}>
-            <LogIn size={15} /> Log in
-          </span>
+          {user ? <AccountMenu /> : (
+            <span onClick={openLogin} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, fontWeight: 600, color: theme.ink, cursor: "pointer" }}>
+              <LogIn size={15} /> Log in
+            </span>
+          )}
           <Pill onClick={() => goTo("marketplace")} style={{ background: theme.ink }}>Explore Marketplace <ArrowRight size={14} /></Pill>
         </div>
       </div>

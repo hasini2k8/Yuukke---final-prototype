@@ -15,9 +15,10 @@ import * as site from "./siteStore.js";
 import * as posts from "./postStore.js";
 import { generateOpenAIImage } from "./openaiProxy.js";
 import { askOpenAIText } from "./openaiText.js";
-import { createProfile, generateAuthUrl, listConnectedAccounts } from "./zernioClient.js";
+import { listIntegrations } from "./postizClient.js";
 import { attemptPublish, refreshStatus } from "./socialSchedule.js";
 import { createVideo } from "./veoProxy.js";
+import { get, run } from "./db.js";
 
 const SOCIAL_PLATFORMS = new Set(["instagram", "linkedin"]);
 
@@ -64,13 +65,19 @@ async function requireUser(req, res) {
 // intentionally not authentication, just an opaque scoping key, so the app
 // stays account-free on this side. The buyer marketplace (cart/wishlist/
 // orders/checkout) is unaffected and keeps real login via requireUser above.
-function requireSeller(req, res) {
-  const sellerId = req.headers["x-seller-id"];
-  if (!sellerId) {
-    sendJson(res, 400, { message: "Missing seller id." });
-    return null;
-  }
-  return sellerId;
+function claimLegacySellerData(userId, legacyId) {
+  if (!legacyId || legacyId === userId) return;
+  run("UPDATE products SET seller_id = ? WHERE seller_id = ?", [userId, legacyId]);
+  run("UPDATE posts SET seller_id = ? WHERE seller_id = ?", [userId, legacyId]);
+  const accountSite = get("SELECT seller_id FROM sites WHERE seller_id = ?", [userId]);
+  if (!accountSite) run("UPDATE sites SET seller_id = ? WHERE seller_id = ?", [userId, legacyId]);
+}
+
+async function requireSeller(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  claimLegacySellerData(user.id, req.headers["x-legacy-seller-id"]);
+  return user.id;
 }
 
 async function handleAuth(req, res, url) {
@@ -189,13 +196,13 @@ async function handleProducts(req, res, url) {
     return true;
   }
   if (url.pathname === "/api/products/mine" && req.method === "GET") {
-    const sellerId = requireSeller(req, res);
+    const sellerId = await requireSeller(req, res);
     if (!sellerId) return true;
     sendJson(res, 200, await listProductsBySeller(sellerId));
     return true;
   }
   if (url.pathname === "/api/products" && req.method === "POST") {
-    const sellerId = requireSeller(req, res);
+    const sellerId = await requireSeller(req, res);
     if (!sellerId) return true;
     try {
       const data = await readJson(req);
@@ -217,7 +224,7 @@ async function handleProducts(req, res, url) {
   // talking to the listing chatbot (src/pages/ListProducts.jsx), rather
   // than creating a duplicate every time more detail comes out.
   if (match && req.method === "PATCH") {
-    const sellerId = requireSeller(req, res);
+    const sellerId = await requireSeller(req, res);
     if (!sellerId) return true;
     try {
       const patch = await readJson(req);
@@ -238,12 +245,13 @@ async function handleSite(req, res, url) {
   if (publicMatch && req.method === "GET") {
     const record = await site.getSiteBySlug(publicMatch[1]);
     if (!record) { sendJson(res, 404, { message: "This storefront isn't public yet." }); return true; }
-    sendJson(res, 200, record);
+    const storefrontProducts = await listProductsBySeller(record.sellerId);
+    sendJson(res, 200, { ...record, products: storefrontProducts });
     return true;
   }
 
   if (!url.pathname.startsWith("/api/site")) return false;
-  const sellerId = requireSeller(req, res);
+  const sellerId = await requireSeller(req, res);
   if (!sellerId) return true;
 
   if (url.pathname === "/api/site" && req.method === "GET") {
@@ -262,53 +270,54 @@ async function handleSite(req, res, url) {
   return false;
 }
 
-// Zernio (server/zernioClient.js) owns the actual Instagram/LinkedIn OAuth,
-// through its own hosted login page — a seller never sees a developer
-// console or token. /connect creates the seller's Zernio profile on first
-// use (stored as sites.zernio_profile_id) and returns that hosted login
-// URL; Zernio's own flow redirects back to the app root when done (no
-// dedicated callback route needed), and /connections re-polls Zernio for
-// what's actually linked so the UI reflects reality once the seller's back.
+// Postiz owns the Instagram/LinkedIn connections. These endpoints select
+// and verify channels from the subscribed Postiz workspace.
 async function handleSocialAuth(req, res, url) {
   if (!url.pathname.startsWith("/api/social")) return false;
 
   const connectMatch = url.pathname.match(/^\/api\/social\/([^/]+)\/connect$/);
-  if (connectMatch && req.method === "GET") {
+  if (connectMatch && req.method === "POST") {
     const platform = connectMatch[1];
     if (!SOCIAL_PLATFORMS.has(platform)) { sendJson(res, 404, { message: "Unknown platform." }); return true; }
-    const sellerId = requireSeller(req, res);
+    const sellerId = await requireSeller(req, res);
     if (!sellerId) return true;
     try {
-      let current = await site.getSite(sellerId);
-      let profileId = current?.zernioProfileId;
-      if (!profileId) {
-        profileId = await createProfile(current?.businessName || "Yuukke seller");
-        current = await site.saveSite(sellerId, { zernioProfileId: profileId });
+      const integrations = await listIntegrations();
+      const identifiers = platform === "instagram" ? new Set(["instagram", "instagram-standalone"]) : new Set(["linkedin", "linkedin-page"]);
+      const integration = integrations.find((item) => identifiers.has(item.identifier));
+      if (!integration) {
+        sendJson(res, 404, { message: `Connect ${platform} inside Postiz first, then try again.` });
+        return true;
       }
-      const redirectUrl = `${process.env.PUBLIC_BASE_URL || `http://${req.headers.host}`}/`;
-      const authUrl = await generateAuthUrl(profileId, platform, redirectUrl);
-      sendJson(res, 200, { url: authUrl });
+      const current = await site.getSite(sellerId);
+      const connections = {
+        ...current?.connections,
+        [platform]: { connected: true, username: integration.profile || integration.name, accountId: integration.id, provider: integration.identifier },
+      };
+      await site.saveSite(sellerId, { connections });
+      sendJson(res, 200, { platform, connected: true, username: integration.profile || integration.name, accountId: integration.id, provider: integration.identifier });
     } catch (e) {
-      sendJson(res, 502, { message: e.message || "Couldn't start connecting that account." });
+      sendJson(res, 502, { message: e.message || "Couldn't connect that Postiz channel." });
     }
     return true;
   }
 
   if (url.pathname === "/api/social/connections" && req.method === "GET") {
-    const sellerId = requireSeller(req, res);
+    const sellerId = await requireSeller(req, res);
     if (!sellerId) return true;
     try {
       const current = await site.getSite(sellerId);
-      if (!current?.zernioProfileId) { sendJson(res, 200, []); return true; }
-      const accounts = await listConnectedAccounts(current.zernioProfileId);
+      const integrations = await listIntegrations();
       const connections = { ...current.connections };
       for (const platform of SOCIAL_PLATFORMS) {
-        const account = accounts.find((a) => a.platform === platform);
-        if (account) connections[platform] = { connected: true, username: account.username, accountId: account._id };
+        const selected = connections[platform];
+        const integration = selected?.accountId && integrations.find((item) => item.id === selected.accountId);
+        if (selected && !integration) delete connections[platform];
+        if (integration) connections[platform] = { connected: true, username: integration.profile || integration.name, accountId: integration.id, provider: integration.identifier };
       }
       const saved = await site.saveSite(sellerId, { connections });
       const rows = [...SOCIAL_PLATFORMS].filter((p) => saved.connections?.[p]?.connected)
-        .map((p) => ({ platform: p, connected: true, username: saved.connections[p].username, accountId: saved.connections[p].accountId }));
+        .map((p) => ({ platform: p, connected: true, username: saved.connections[p].username, accountId: saved.connections[p].accountId, provider: saved.connections[p].provider }));
       sendJson(res, 200, rows);
     } catch (e) {
       sendJson(res, 502, { message: e.message || "Couldn't check connection status." });
@@ -316,12 +325,10 @@ async function handleSocialAuth(req, res, url) {
     return true;
   }
 
-  // Local-only — Zernio doesn't expose a revoke call, and revoking the
-  // grant on Zernio's side isn't necessary just to stop posting there from
-  // Yuukke; the seller can revoke access from Zernio's own dashboard too.
+  // Disconnect from Yuukke only; the channel remains available in Postiz.
   const disconnectMatch = url.pathname.match(/^\/api\/social\/([^/]+)\/disconnect$/);
   if (disconnectMatch && req.method === "POST") {
-    const sellerId = requireSeller(req, res);
+    const sellerId = await requireSeller(req, res);
     if (!sellerId) return true;
     const current = await site.getSite(sellerId);
     const connections = { ...current?.connections };
@@ -337,7 +344,7 @@ async function handleSocialAuth(req, res, url) {
 async function handlePosts(req, res, url) {
   if (!url.pathname.startsWith("/api/posts")) return false;
 
-  const sellerId = requireSeller(req, res);
+  const sellerId = await requireSeller(req, res);
   if (!sellerId) return true;
 
   if (url.pathname === "/api/posts" && req.method === "GET") {
@@ -354,6 +361,28 @@ async function handlePosts(req, res, url) {
       sendJson(res, 201, post);
     } catch (e) {
       sendJson(res, 400, { message: `Couldn't save that post: ${e.message}` });
+    }
+    return true;
+  }
+
+  // One explicit confirmation can hand a campaign's platform variants to
+  // their respective connected accounts together. Results stay separate so
+  // a failure on one network never hides a success on the other.
+  if (url.pathname === "/api/posts/confirm-many" && req.method === "POST") {
+    try {
+      const { ids } = await readJson(req);
+      const uniqueIds = [...new Set(Array.isArray(ids) ? ids : [])].slice(0, 10);
+      if (!uniqueIds.length) { sendJson(res, 400, { message: "Choose at least one post." }); return true; }
+      const selected = await Promise.all(uniqueIds.map((id) => posts.getPost(sellerId, id)));
+      if (selected.some((post) => !post)) { sendJson(res, 404, { message: "One or more posts could not be found." }); return true; }
+      if (selected.some((post) => post.status !== "draft")) { sendJson(res, 400, { message: "Only draft posts can be submitted." }); return true; }
+      const results = await Promise.all(selected.map(async (post) => {
+        const scheduled = await posts.updatePost(sellerId, post.id, { status: "scheduled", scheduleError: null });
+        return attemptPublish(sellerId, scheduled);
+      }));
+      sendJson(res, 200, results);
+    } catch (e) {
+      sendJson(res, 400, { message: `Couldn't schedule those posts: ${e.message}` });
     }
     return true;
   }
@@ -378,8 +407,8 @@ async function handlePosts(req, res, url) {
   }
 
   // The seller's explicit "yes, post this" step — a draft only ever
-  // becomes "scheduled" (and gets handed to Zernio) from here, in response
-  // to a confirm dialog on the frontend, never automatically. Zernio holds
+  // becomes "scheduled" (and gets handed to Postiz) from here, in response
+  // to a confirm dialog on the frontend, never automatically. Postiz holds
   // the post and fires it at its own scheduled time — this doesn't need to
   // gate on "is it due right now" the way the old direct-OAuth version did.
   const confirmMatch = url.pathname.match(/^\/api\/posts\/([^/]+)\/confirm$/);
@@ -401,7 +430,7 @@ async function handlePosts(req, res, url) {
     try {
       const post = await posts.getPost(sellerId, statusMatch[1]);
       if (!post) { sendJson(res, 404, { message: "Post not found" }); return true; }
-      // Zernio owns the actual scheduling/publishing now — this just asks
+      // Postiz owns the actual scheduling/publishing now — this just asks
       // it what really happened rather than assuming success.
       const updated = post.status === "scheduled" ? await refreshStatus(sellerId, post) : post;
       sendJson(res, 200, updated || post);
@@ -429,8 +458,8 @@ async function handlePosts(req, res, url) {
 
 async function handleOpenAI(req, res, url) {
   if (url.pathname === "/api/openai/image" && req.method === "POST") {
-    const { prompt } = await readJson(req);
-    const result = await generateOpenAIImage(prompt);
+    const { prompt, referenceImageDataUrl } = await readJson(req);
+    const result = await generateOpenAIImage(prompt, referenceImageDataUrl);
     res.writeHead(result.status, { "Content-Type": result.contentType });
     res.end(result.text);
     return true;

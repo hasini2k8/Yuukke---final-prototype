@@ -50,7 +50,7 @@ export default function LoginModal({ onClose }) {
           {mode === "login" ? "Welcome back" : "Create your account"}
         </h2>
         <p style={{ fontSize: 13.5, color: theme.inkSoft, marginBottom: 22, fontFamily: theme.fontBody }}>
-          {mode === "login" ? "Log in to shop, save favorites, and track orders." : "Join Yuukke to shop, save favorites, and track orders."}
+          {mode === "login" ? "Log in to manage your business or continue shopping." : "Join Yuukke to build your business, shop, and track orders."}
         </p>
 
         <form onSubmit={handleSubmit}>

@@ -3,6 +3,7 @@ import { LayoutDashboard, Package, Palette, Calendar, Sparkles } from "lucide-re
 import { theme } from "../theme";
 import { Logo } from "./Shared";
 import AskYuukke from "./AskYuukke";
+import AccountMenu from "./AccountMenu";
 
 const TABS = [
   { id: "dashboard", label: "Overview", icon: LayoutDashboard },
@@ -33,12 +34,7 @@ export default function DashboardShell({ goTo, active, businessName, children, s
             );
           })}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: theme.wineTint, color: theme.wine, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>
-            {businessName ? businessName.trim()[0]?.toUpperCase() : "Y"}
-          </div>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: theme.ink }}>{businessName || "Your store"}</span>
-        </div>
+        <AccountMenu label={businessName || "Your store"} />
       </div>
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "40px 24px 90px" }}>{children}</div>
       <AskYuukke pageId={active} businessName={businessName} speechLang={speechLang || "en-IN"} />

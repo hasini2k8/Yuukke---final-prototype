@@ -29,7 +29,7 @@ export default function GoogleTranslateWidget() {
 
   return (
     <div style={{
-      position: "fixed", top: 10, right: 10, zIndex: 500, background: theme.white,
+      position: "fixed", bottom: 92, left: 26, zIndex: 89, background: theme.white,
       borderRadius: 10, boxShadow: "0 4px 14px rgba(0,0,0,.12)", padding: "2px 6px",
     }}>
       <div id={ELEMENT_ID} />

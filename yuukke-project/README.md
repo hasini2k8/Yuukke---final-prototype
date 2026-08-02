@@ -2,6 +2,46 @@
 
 A marketplace web app for women entrepreneurs — storefronts, AI-assisted product listings, 3D product previews, and a full marketplace with cart/checkout/orders.
 
+## Technology stack
+
+### Frontend
+
+- **React 19** for the marketplace, seller dashboard, listing chat, live storefront builder, calendar, checkout, and account UI.
+- **React Router 7** for marketplace, product, cart, order, and published-storefront URLs.
+- **Vite 8** for development, API proxying, and production bundling.
+- **Three.js, React Three Fiber, Drei, and Gaussian Splats 3D** for rotatable product models and the try-in-your-space scene.
+- **Lucide React** for the accessible icon system.
+- **Web Speech APIs** for voice input and read-aloud responses, with typed input as the fallback.
+- **Google Translate widget** for interface translation.
+
+### Backend and data layer
+
+- **Node.js HTTP server** with handlers for authentication, products, storefronts, cart, wishlist, orders, AI, social scheduling, and 3D generation.
+- **SQLite (`node:sqlite`)** with WAL mode and foreign keys for accounts, sessions, seller products, storefronts, carts, wishlists, orders, and social campaigns.
+- **Repository/store modules** isolate SQL and ownership rules for authentication, products, sites, posts, carts, wishlists, and orders.
+- **Authenticated seller boundaries** scope business data to the signed-in user and safely claim legacy browser data after login.
+- **Public storefront aggregation** resolves a published slug and returns only that seller's listings—not the global marketplace catalogue.
+- **Server-side validation and ownership checks** prevent sellers from changing another seller's data.
+- **Scrypt password hashing**, random salts, cryptographically random bearer sessions, and server-only API credentials.
+- **Media processing and proxy services** support images and generated assets during local development without exposing secret keys.
+
+### AI and automation
+
+- **OpenAI Chat Completions** for listing conversations, structured extraction, originality rewrites, document/photo understanding, storefront generation, live website edits, brand guidelines, and social captions.
+- **OpenAI image generation** for logos, brand characters, and platform-specific social graphics.
+- **Tripo3D API** for product-photo-to-3D generation and customer-space reconstruction.
+- **Google Gemini Veo** for optional image-to-video social reels.
+- **Postiz Public API** for connected Instagram/LinkedIn channels, media upload, and background scheduled publishing.
+
+## Main data flow
+
+1. A signed-in seller describes a product and uploads its photo in the listing conversation.
+2. AI extracts the listing fields; the server saves the product and image under that seller.
+3. The storefront generator receives only those saved listings and derives the content, sections, and color scheme from them.
+4. The dedicated website chatbot accepts typed or spoken changes and updates the live preview after every successful response.
+5. Publishing creates a stable `/site/:slug` URL whose endpoint returns only the storefront owner's products.
+6. Social drafts remain editable. After approval, Postiz owns the scheduled background delivery.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 18 or later (tested on v24)
@@ -20,8 +60,8 @@ Create a `.env` file in the project root:
 ```bash
 TRIPO_API_KEY=
 OPENAI_API_KEY=
-ZERNIO_API_KEY=
-PUBLIC_BASE_URL=
+POSTIZ_API_KEY=
+POSTIZ_API_URL=https://api.postiz.com/public/v1
 GEMINI_API_KEY=
 ```
 
@@ -29,19 +69,17 @@ GEMINI_API_KEY=
 |---|---|---|
 | `TRIPO_API_KEY` | Generating rotatable 3D product previews from a photo (Tripo3D) | [developers.tripo3d.ai](https://developers.tripo3d.ai/) |
 | `OPENAI_API_KEY` | Every AI feature — the listing chatbot, photo analysis, storefront/business-identity generator, social post captions, Ask Yuukke assistant (Chat Completions), and business logos/social post graphics (gpt-image-1). Server-side only — never exposed to the browser | [platform.openai.com](https://platform.openai.com/api-keys) |
-| `ZERNIO_API_KEY` | Real, automated posting to Instagram and LinkedIn (see below) | [zernio.com](https://zernio.com/) |
-| `PUBLIC_BASE_URL` | Zernio's OAuth redirect URI — set to your deployed app's URL; falls back to whatever host the request came in on, which only works once actually deployed | — |
+| `POSTIZ_API_KEY` | Lists your connected channels and automatically schedules approved Instagram and LinkedIn posts | Postiz → Settings → Developers → Public API |
+| `POSTIZ_API_URL` | Postiz Public API base URL; omit for Postiz Cloud, set it for a self-hosted instance | [Postiz API documentation](https://docs.postiz.com/public-api/introduction) |
 | `GEMINI_API_KEY` | Turning a generated post image into a short AI-animated video reel (Google's Veo model) | [Google AI Studio](https://aistudio.google.com/apikey) |
 
 The app still runs without these — the features that depend on them will show an error instead of failing to build. `.env` is gitignored; never commit it.
 
 ### Publishing to Instagram and LinkedIn
 
-Real posting goes through [Zernio](https://zernio.com/), a social-posting API that already has Meta's and LinkedIn's platform approvals. This matters because a seller here is a small-business owner, not a developer — they shouldn't have to register their own app with each platform or generate an access token. Instead, on the Storefront tab, a seller clicks "Connect" next to Instagram or LinkedIn, which opens Zernio's own hosted login page (`server/zernioClient.js`) — they authorize the same way they'd normally log in, no tokens or developer terms ever shown, and our server never sees their password. Once connected, the AI (OpenAI Chat Completions for captions, gpt-image-1 for the image) drafts posts for that seller's own account, and each confirmed post is handed to Zernio with its scheduled date — Zernio's own infrastructure fires it for real at that time (`server/socialSchedule.js`), so it works even if this app's server isn't running at that exact moment. Images are uploaded directly from our server to Zernio's storage (not read from a public URL on our end), so this works from local dev too, not just once deployed.
+Real posting goes through the seller's subscribed [Postiz](https://postiz.com/) workspace. Connect Instagram and LinkedIn inside Postiz first. Yuukke then discovers those channels through the Postiz Public API. The AI creates separate captions and images, but keeps them as editable Yuukke drafts. Only after the seller reviews and confirms a post does Yuukke upload its media and schedule it through Postiz. Postiz holds the scheduled job and publishes it automatically even when Yuukke is closed.
 
-**Cost: free for the first 2 connected accounts, no credit card.** Beyond that it's Zernio's own per-account pricing — no cost to run this app itself.
-
-**One-time setup:** sign up at [zernio.com](https://zernio.com/) (free), go to Settings → API Keys, create a key, and set `ZERNIO_API_KEY` in `.env`. That's it — no per-platform developer app, no domain verification.
+**One-time setup:** in Postiz, open Settings → Developers → Public API, create an API key, and set `POSTIZ_API_KEY` in `.env`. For Postiz Cloud no other setting is needed. For self-hosted Postiz, set `POSTIZ_API_URL` to `{your backend URL}/public/v1`.
 
 ### Video reels
 
@@ -99,4 +137,4 @@ Check that `OPENAI_API_KEY` is set in `.env` and restart `npm run dev`.
 Check that `TRIPO_API_KEY` is set in `.env` and restart `npm run dev`.
 
 **"Connect" or scheduled posts fail**
-Check that `ZERNIO_API_KEY` is set in `.env` and restart `npm run dev`.
+Check that `POSTIZ_API_KEY` is set in `.env`, confirm the social channel is connected inside Postiz, and restart `npm run dev`.

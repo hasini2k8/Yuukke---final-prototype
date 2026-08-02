@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Camera, Briefcase, Check, Copy, ExternalLink, Sparkles, Calendar } from "lucide-react";
+import { ArrowLeft, Camera, Briefcase, Check, Copy, ExternalLink, Sparkles, Calendar, Palette, Globe2, Megaphone, Eye } from "lucide-react";
 import { theme, ACCENTS, ALL_SECTIONS } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import StorePreview from "../components/StorePreview";
@@ -8,6 +8,7 @@ import SpeakButton from "../components/SpeakButton";
 import TalkAnalyseExecuteBar from "../components/TalkAnalyseExecuteBar";
 import PostGeneratorChat from "../components/PostGeneratorChat";
 import GeneratedPostsPanel from "../components/GeneratedPostsPanel";
+import WebsiteGeneratorChat from "../components/WebsiteGeneratorChat";
 import { useTalkAnalyseExecute } from "../hooks/useTalkAnalyseExecute";
 import { generateImage, buildEditContext, BUSINESS_SITE_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite, saveSite } from "../lib/site";
@@ -53,6 +54,7 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
   const [existingPosts, setExistingPosts] = useState([]);
   const [pendingPosts, setPendingPosts] = useState([]);
   const autoRanWebsite = useRef(false);
+  const autoRanCatalog = useRef(false);
   const autoRanLogo = useRef(false);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
   const websiteEdit = useTalkAnalyseExecute({
     system: BUSINESS_SITE_SYSTEM_PROMPT,
     buildContext: (instruction) => buildEditContext({
-      base: "A small business storefront on Yuukke, a marketplace for handmade and small-business goods in India.",
+      base: `Build this storefront only from these seller listings; never invent other products, services, reviews, or claims: ${JSON.stringify(products.map((p) => ({ name: p.name, category: p.category, price: p.price, description: p.description })))}`,
       current: config.businessName ? siteAIFields(config) : null,
       instruction,
     }),
@@ -95,6 +97,19 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     websiteEdit.run("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteLoaded, config.businessName]);
+
+  // A newly-created listing becomes the source of truth for the next site
+  // draft. Existing seller chat edits are preserved unless the catalog is
+  // newer than the last saved storefront.
+  useEffect(() => {
+    if (!siteLoaded || autoRanCatalog.current || !products.length || !config.businessName || websiteEdit.busy) return;
+    const newestProduct = Math.max(...products.map((product) => Date.parse(product.createdAt || 0) || 0));
+    const lastSiteSave = Date.parse(storeConfig?.updatedAt || 0) || 0;
+    if (newestProduct > lastSiteSave) {
+      autoRanCatalog.current = true;
+      websiteEdit.run("Create or refresh the storefront identity, content, sections, and color scheme from the listed products only.");
+    }
+  }, [siteLoaded, products, storeConfig?.updatedAt, config.businessName, websiteEdit.busy]);
 
   // Logo isn't a JSON-shaped edit like the rest of the site, so this folds
   // the instruction into the image prompt directly rather than going
@@ -141,9 +156,8 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     }
   }
 
-  // One click per platform — Zernio's own hosted login page handles the
-  // actual OAuth (server/zernioClient.js), so no username needs typing in
-  // ahead of time; Zernio tells us who logged in once they're done.
+  // Match this seller to a channel already connected in the subscribed
+  // Postiz workspace. Social passwords and provider tokens stay in Postiz.
   async function connectSocial(platform) {
     setConnectingPlatform(platform);
     setConnectError("");
@@ -155,15 +169,11 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     // would make window.open() return null even though the tab still
     // opens — we need the real reference back to navigate it, so sever the
     // opener link manually below instead, once we actually have it.)
-    const tab = window.open("", "_blank");
-    if (tab) tab.opener = null;
     try {
-      const { url } = await connectPlatform(platform);
-      if (tab) tab.location.href = url;
-      else window.open(url, "_blank", "noopener,noreferrer");
+      await connectPlatform(platform);
+      await loadConnections();
     } catch (e) {
-      tab?.close();
-      setConnectError(e.message || "Couldn't start connecting that account just now.");
+      setConnectError(e.message || "Couldn't connect that Postiz channel just now.");
     } finally {
       setConnectingPlatform("");
     }
@@ -179,9 +189,7 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     }
   }
 
-  // The OAuth flow finishes in a separate tab (server/index.js's /callback
-  // route) — this re-checks what's actually connected once the seller's
-  // back here, since we have no direct way to hear from that other tab.
+  // Re-check the selected channels against the live Postiz integrations.
   async function refreshConnections() {
     setRefreshing(true);
     setConnectError("");
@@ -208,19 +216,48 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     goTo("dashboard");
   }
 
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <DashboardShell goTo={goTo} active="customizeStore" businessName={null} t={(k) => EN_STRINGS[k] || k} speechLang={speechLang}>
       <span onClick={() => goTo("dashboard")} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: theme.wine, cursor: "pointer", marginBottom: 18 }}>
         <ArrowLeft size={14} /> Back to dashboard
       </span>
-      <h1 style={{ fontFamily: theme.fontDisplay, fontSize: 28, color: theme.ink, margin: "0 0 8px" }}>Customize your storefront</h1>
-      <p style={{ fontSize: 14.5, color: theme.inkSoft, marginBottom: 26, fontFamily: theme.fontBody, maxWidth: 560 }}>
-        A starting theme appears automatically — name, tagline, story, colors, and logo. Tell it what to change, by voice or typing, and it updates right away.
-      </p>
+      <section style={{ background: `linear-gradient(135deg, ${theme.wine} 0%, #6f1833 58%, #b35a71 100%)`, borderRadius: 24, padding: "28px clamp(20px, 4vw, 38px)", color: "#fff", marginBottom: 22, boxShadow: "0 18px 48px rgba(78,18,39,.16)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 20, flexWrap: "wrap" }}>
+          <div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 999, background: "rgba(255,255,255,.14)", fontSize: 11.5, fontWeight: 800, letterSpacing: ".04em", marginBottom: 12 }}><Sparkles size={13} /> STOREFRONT STUDIO</span>
+            <h1 style={{ fontFamily: theme.fontDisplay, fontSize: "clamp(27px, 4vw, 38px)", color: "#fff", margin: "0 0 8px", lineHeight: 1.08 }}>Build your shop, beautifully.</h1>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,.82)", margin: 0, maxWidth: 600, lineHeight: 1.55 }}>Design, publish, promote, and preview your storefront from one simple workspace. Type, speak, or edit everything manually.</p>
+          </div>
+          <button onClick={save} style={{ background: "#fff", color: theme.wine, border: "none", borderRadius: 12, padding: "12px 18px", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 8px 20px rgba(0,0,0,.12)" }}>Save storefront</button>
+        </div>
+      </section>
 
-      <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+      <div aria-label="Storefront features" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 24 }}>
+        {[["design-tools", Palette, "Design", "Theme, colors & layout"], ["website-tools", Globe2, "Website", "Name, logo & publishing"], ["social-tools", Megaphone, "Promote", "Socials, posts & calendar"], ["live-preview", Eye, "Preview", `${products.length} listed product${products.length === 1 ? "" : "s"}`]].map(([id, Icon, title, copy]) => (
+          <button key={id} onClick={() => jumpTo(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 14px", textAlign: "left", background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 14, cursor: "pointer", boxShadow: "0 5px 16px rgba(44,24,31,.04)" }}>
+            <span style={{ width: 36, height: 36, borderRadius: 11, flexShrink: 0, display: "grid", placeItems: "center", color: theme.wine, background: theme.wineTint }}><Icon size={17} /></span>
+            <span><strong style={{ display: "block", fontSize: 12.5, color: theme.ink }}>{title}</strong><small style={{ color: theme.inkSoft, fontSize: 10.5 }}>{copy}</small></span>
+          </button>
+        ))}
+      </div>
+
+      <div id="design-tools" style={{ scrollMarginTop: 20 }}><WebsiteGeneratorChat config={config} products={products} onChange={(result) => {
+        setConfig((current) => ({ ...current, ...result }));
+        if (config.published) {
+          saveSite({ ...result, published: true }).then((saved) => {
+            setConfig((current) => ({ ...current, ...saved }));
+            setStoreConfig(saved);
+          }).catch(() => {});
+        }
+      }} speechLang={speechLang} /></div>
+
+      <div style={{ display: "flex", gap: 28, flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ flex: "1 1 320px", minWidth: 300 }}>
-          <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
+          <div id="website-tools" style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20, scrollMarginTop: 20, boxShadow: "0 8px 28px rgba(44,24,31,.045)" }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, display: "block", marginBottom: 7 }}>
               {config.businessName ? "Change the look and feel" : "Describe the look and feel you want"}
             </span>
@@ -361,7 +398,7 @@ Generated automatically above — Yuukke's AI names your business, writes its st
 
             <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 10 }}>Connect your socials</p>
             <p style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
-              One click per platform — Zernio handles the login, no developer accounts or tokens to set up. You'll log in the same way you already do, and no passwords are ever shared with Yuukke.
+              Choose a channel already connected in your Postiz account. Yuukke sends only approved, scheduled posts to Postiz in the background.
             </p>
 
             {connectError && <p style={{ color: "#a32d2d", fontSize: 11.5, margin: "0 0 10px" }}>{connectError}</p>}
@@ -392,7 +429,7 @@ Generated automatically above — Yuukke's AI names your business, writes its st
                         borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 12, cursor: !config.businessName ? "default" : "pointer",
                         opacity: !config.businessName ? 0.5 : 1,
                       }}>
-                        {connectingPlatform === id ? <Spinner size={12} /> : <ExternalLink size={12} />} Connect
+                        {connectingPlatform === id ? <Spinner size={12} /> : <ExternalLink size={12} />} Use Postiz channel
                       </button>
                     )}
                   </div>
@@ -408,9 +445,11 @@ Generated automatically above — Yuukke's AI names your business, writes its st
             </button>
           </div>
 
+          <div id="social-tools" style={{ scrollMarginTop: 20 }}>
           {config.businessName && (
             <PostGeneratorChat
               config={config}
+              products={products}
               speechLang={speechLang}
               onPostsGenerated={(created) => setPendingPosts((p) => [...p, ...created])}
             />
@@ -425,15 +464,23 @@ Generated automatically above — Yuukke's AI names your business, writes its st
               <Calendar size={14} /> View social calendar
             </button>
           )}
+          </div>
 
           <button onClick={save} style={{ background: theme.wine, color: "#fff", border: "none", borderRadius: 12, padding: "13px 28px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
             Save storefront & continue
           </button>
         </div>
 
-        <div style={{ flex: "1 1 320px", minWidth: 300 }}>
-          <p style={{ fontSize: 12.5, fontWeight: 700, color: theme.ink, marginBottom: 12 }}>Live preview</p>
-          <StorePreview storeConfig={config} products={products} />
+        <div id="live-preview" style={{ flex: "1 1 320px", minWidth: 300, scrollMarginTop: 20 }}>
+          <div style={{ position: "sticky", top: 18, zIndex: 2, marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <p style={{ fontSize: 12.5, fontWeight: 800, color: theme.ink, margin: 0, display: "flex", alignItems: "center", gap: 7 }}><Eye size={15} color={theme.wine} /> Live storefront</p>
+              <span style={{ fontSize: 10.5, color: "#2c6e49", background: "#e6f2ea", padding: "5px 9px", borderRadius: 999, fontWeight: 800 }}>Updates live</span>
+            </div>
+            <div style={{ borderRadius: 20, overflow: "hidden", boxShadow: "0 18px 46px rgba(44,24,31,.12)", border: `1px solid ${theme.line}`, background: theme.white }}>
+              <StorePreview storeConfig={config} products={products} />
+            </div>
+          </div>
           <GeneratedPostsPanel
             posts={pendingPosts}
             existingPosts={existingPosts}

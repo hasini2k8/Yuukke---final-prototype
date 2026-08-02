@@ -4,7 +4,6 @@ import { Camera, Briefcase, Sparkles, ArrowRight } from "lucide-react";
 import { theme } from "../theme";
 import { Logo, Spinner } from "../components/Shared";
 import { fetchPublicSite } from "../lib/site";
-import { fetchProducts } from "../lib/products";
 
 const PLATFORM_ICONS = { instagram: Camera, linkedin: Briefcase };
 
@@ -20,10 +19,9 @@ export default function GeneratedSitePage() {
       .then((record) => {
         if (cancelled) return;
         setSite(record);
+        setProducts(record.products || []);
         setStatus("ready");
-        return fetchProducts();
       })
-      .then((list) => { if (!cancelled && list) setProducts(list); })
       .catch(() => { if (!cancelled) setStatus("missing"); });
     return () => { cancelled = true; };
   }, [slug]);

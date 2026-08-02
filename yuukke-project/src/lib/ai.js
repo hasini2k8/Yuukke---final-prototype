@@ -20,11 +20,11 @@ async function callOpenAI(system, messages, { json } = {}) {
 // key stays server-side, same as callOpenAI above. Returns a data: URL,
 // matching the convention already used for uploaded photos elsewhere in the
 // app (ProductDetailCard).
-export async function generateImage(prompt) {
+export async function generateImage(prompt, referenceImageDataUrl = "") {
   const response = await fetch("/api/openai/image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, referenceImageDataUrl }),
   });
   const data = await response.json().catch(() => null);
   if (!response.ok || !data?.dataUrl) {
@@ -103,7 +103,7 @@ export const MULTI_PLATFORM_POST_SYSTEM_PROMPT =
 // and the currently visible numbered posts, so the frontend can just apply
 // {postNumber, newDate} directly rather than parsing dates itself.
 export const MOVE_POST_SYSTEM_PROMPT =
-  'You are a scheduling assistant for Yuukke, a marketplace for small businesses in India. Given today\'s IST date, a numbered list of a seller\'s draft social posts (each with its current date), and an instruction about moving one of them, respond with ONLY JSON, no markdown fences, no prose, in exactly this shape: {"postNumber": integer (which numbered post the instruction refers to), "newDate": string (the resolved date in YYYY-MM-DD, working out weekdays like "Friday" or "next Monday" relative to today\'s given date)}. If the instruction is ambiguous about which post or which date, make your best reasonable guess rather than refusing.';
+  'You are a scheduling assistant for Yuukke, a marketplace for small businesses in India. Given today\'s IST date, a numbered list of a seller\'s draft social posts with current dates and times, and an instruction about moving one post, respond with ONLY JSON, no markdown fences, no prose, in exactly this shape: {"postNumber": integer (the numbered post), "newDate": string (resolved YYYY-MM-DD, interpreting weekdays relative to today), "newTime": string (resolved 24-hour HH:mm in IST)}. If the seller changes only the date, preserve that post\'s current time. If they change only the time, preserve its current date. Understand natural expressions such as "4 PM", "half past four", "tomorrow morning", and "next Friday at 16:30". Make the best reasonable interpretation.';
 
 // Drives the AI Marketing tab's per-product platform suggestion — a small,
 // cheap call so a seller with only Instagram or only LinkedIn connected
@@ -145,7 +145,7 @@ export function buildCharacterPrompt({ businessName, category, accentColor, seed
 }
 
 export const CHAT_SYSTEM_PROMPT =
-  "You are Yuukke's friendly product-listing assistant, speaking with a small-business owner in India who may be new to online selling. Keep replies short (2-4 sentences), warm, plain-spoken, and encouraging. Help them describe what they sell, and when they give you rough notes, offer to turn them into polished, customer-worthy copy. Ask at most one question at a time.";
+  "You are Yuukke's friendly product-listing assistant, speaking with a small-business owner in India who may be new to online selling. Keep replies short (2-4 sentences), warm, plain-spoken, and encouraging. Help them describe what they sell, ask for price or category when missing, and explicitly ask them to upload one clear product photo using the image button before the listing is complete. When they give rough notes, offer polished customer-worthy copy. Ask at most one question at a time.";
 
 // Note: this looks at the photo only — there's no live web search available,
 // so it can't literally compare against other companies' real listings. It
