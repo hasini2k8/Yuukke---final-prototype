@@ -3,6 +3,7 @@
 // (src/lib/sellerId.js) — no login involved. Local dev only for now — see
 // server/productStore.js for the production-persistence caveat.
 import { sellerFetch } from "./sellerId";
+import { apiUrl } from "./api";
 
 async function unwrap(response) {
   const data = await response.json().catch(() => null);
@@ -27,6 +28,6 @@ export async function saveSite(patch) {
 }
 
 export async function fetchPublicSite(slug) {
-  const res = await fetch(`/api/site/public/${encodeURIComponent(slug)}`);
+  const res = await fetch(apiUrl(`/api/site/public/${encodeURIComponent(slug)}`));
   return unwrap(res);
 }

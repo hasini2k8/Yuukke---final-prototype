@@ -2,11 +2,13 @@
   "name": "my-portfolio",
   "private": true,
   "version": "0.0.0",
+  "engines": { "node": ">=24" },
   "type": "module",
   "scripts": {
     "dev": "concurrently -n vite,proxy -c blue,magenta \"vite\" \"npm run server\"",
     "vite": "vite",
     "server": "node --env-file-if-exists=.env server/index.js",
+    "start": "node server/index.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

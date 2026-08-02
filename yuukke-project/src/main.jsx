@@ -16,6 +16,7 @@ import { AuthProvider } from "./components/AuthContext.jsx";
 import { CartProvider } from "./components/CartContext.jsx";
 import { WishlistProvider } from "./components/WishlistContext.jsx";
 import GoogleTranslateWidget from "./components/GoogleTranslateWidget.jsx";
+import { storefrontSlugFromHostname } from "./lib/storefrontDomain.js";
 
 // The Google Translate widget rewrites text nodes directly in the DOM,
 // which can conflict with React's own reconciliation (a well-known issue
@@ -46,6 +47,8 @@ function MarketplaceRoute() {
   return <MarketplacePage goTo={(page) => navigate(page === "home" ? "/" : `/${page}`)} />;
 }
 
+const wildcardStorefrontSlug = storefrontSlugFromHostname();
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
@@ -53,7 +56,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <WishlistProvider>
           <BrowserRouter>
             <GoogleTranslateWidget />
-            <Routes>
+            {wildcardStorefrontSlug ? <GeneratedSitePage slugOverride={wildcardStorefrontSlug} /> : <Routes>
               <Route path="/marketplace" element={<MarketplaceRoute />} />
               <Route path="/product/:id" element={<ProductDetailPage />} />
               <Route path="/cart" element={<CartPage />} />
@@ -65,7 +68,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <Route path="/business-exchange" element={<BusinessExchangePage />} />
               <Route path="/site/:slug" element={<GeneratedSitePage />} />
               <Route path="*" element={<App />} />
-            </Routes>
+            </Routes>}
           </BrowserRouter>
         </WishlistProvider>
       </CartProvider>

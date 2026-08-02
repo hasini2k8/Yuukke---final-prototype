@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: yuukke-backend
+    runtime: docker
+    rootDir: yuukke-project
+    dockerfilePath: ./Dockerfile.backend
+    healthCheckPath: /health
+    envVars:
+      - key: YUUKKE_DATA_DIR
+        value: /var/data
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: CORS_ROOT_DOMAIN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: POSTIZ_API_KEY
+        sync: false
+      - key: POSTIZ_API_URL
+        value: https://api.postiz.com/public/v1
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TRIPO_API_KEY
+        sync: false
+    disk:
+      name: yuukke-data
+      mountPath: /var/data
+      sizeGB: 1

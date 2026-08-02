@@ -4,6 +4,7 @@
 // anonymous id (src/lib/sellerId.js) — no login involved. Local dev only
 // for now — see server/productStore.js for the production-persistence caveat.
 import { sellerFetch } from "./sellerId";
+import { apiUrl } from "./api";
 
 async function unwrap(response) {
   const data = await response.json().catch(() => null);
@@ -14,7 +15,7 @@ async function unwrap(response) {
 }
 
 export async function fetchProducts() {
-  const res = await fetch("/api/products");
+  const res = await fetch(apiUrl("/api/products"));
   return unwrap(res);
 }
 
@@ -24,7 +25,7 @@ export async function fetchMyProducts() {
 }
 
 export async function fetchProduct(id) {
-  const res = await fetch(`/api/products/${id}`);
+  const res = await fetch(apiUrl(`/api/products/${id}`));
   return unwrap(res);
 }
 

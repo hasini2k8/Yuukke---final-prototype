@@ -4,6 +4,7 @@ import { OrbitControls } from "@react-three/drei";
 import { AlertTriangle } from "lucide-react";
 import { theme } from "../theme";
 import SplatGroup from "./SplatGroup";
+import { apiUrl } from "../lib/api";
 
 export default function SplatViewer({ modelUrl, height = 320, backgroundColor = "#171012" }) {
   const [loading, setLoading] = useState(true);
@@ -18,7 +19,7 @@ export default function SplatViewer({ modelUrl, height = 320, backgroundColor = 
         <color attach="background" args={[backgroundColor]} />
         <ambientLight intensity={1.2} />
         <SplatGroup
-          url={modelUrl}
+          url={apiUrl(modelUrl)}
           onLoaded={() => setLoading(false)}
           onError={(e) => { setError(e?.message || "Couldn't load the 3D preview."); setLoading(false); }}
         />

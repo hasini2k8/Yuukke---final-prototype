@@ -1,9 +1,10 @@
+import { apiUrl } from "./api";
 // Every text AI call in this app goes through OpenAI's Chat Completions API,
 // proxied through /api/openai/chat (server/openaiText.js) so the billable
 // key stays server-side — unlike the Gemini key this replaced, which was a
 // VITE_-exposed client-side key.
 async function callOpenAI(system, messages, { json } = {}) {
-  const response = await fetch("/api/openai/chat", {
+  const response = await fetch(apiUrl("/api/openai/chat"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ system, messages, json: !!json }),
@@ -21,7 +22,7 @@ async function callOpenAI(system, messages, { json } = {}) {
 // matching the convention already used for uploaded photos elsewhere in the
 // app (ProductDetailCard).
 export async function generateImage(prompt, referenceImageDataUrl = "") {
-  const response = await fetch("/api/openai/image", {
+  const response = await fetch(apiUrl("/api/openai/image"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, referenceImageDataUrl }),
