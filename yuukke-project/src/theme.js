@@ -6,4 +6,4 @@ export const theme = {
 };
 
 export const ACCENTS = ["#7d1935", "#a3512c", "#2c6e49", "#1f5c7a", "#6a4c93", "#8a7d3f"];
-export const ALL_SECTIONS = ["Hero banner", "Best sellers", "Categories", "About the maker", "Customer reviews", "Instagram feed", "Newsletter signup"];
+export const ALL_SECTIONS = ["Hero banner", "Featured products", "Categories", "About the business", "Our story", "Why choose us", "FAQ", "Contact", "Instagram feed", "Newsletter signup", "Customer chatbot"];

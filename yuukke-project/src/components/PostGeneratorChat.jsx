@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Send, Image as ImageIcon, Film } from "lucide-react";
 import { theme } from "../theme";
 import { Spinner } from "./Shared";
@@ -6,6 +6,7 @@ import MicButton from "./MicButton";
 import PostThumb from "./PostThumb";
 import { askOpenAIJSON, generateImage, MULTI_PLATFORM_POST_SYSTEM_PROMPT } from "../lib/ai";
 import { createPost, generateVideo } from "../lib/posts";
+import { fetchAnalytics } from "../lib/analytics";
 
 const POST_PLATFORMS = ["instagram", "linkedin"];
 const PLATFORM_LABEL = { instagram: "Instagram", linkedin: "LinkedIn" };
@@ -25,6 +26,11 @@ export default function PostGeneratorChat({ config, products = [], speechLang, o
   const [topic, setTopic] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [marketingStrategy, setMarketingStrategy] = useState("");
+
+  useEffect(() => {
+    fetchAnalytics().then((data) => setMarketingStrategy(data.strategy?.strategy || "")).catch(() => {});
+  }, []);
 
   function chooseProduct(product) {
     if (!product || busy) return;
@@ -81,12 +87,14 @@ export default function PostGeneratorChat({ config, products = [], speechLang, o
         `Business: ${config.businessName || "this business"}`,
         `Tagline: ${config.tagline || ""}`,
         `Category: ${config.category || ""}`,
+        config.brandGuidelines ? `Brand guidelines: ${JSON.stringify(config.brandGuidelines)}` : "",
         `Product name: ${selectedProduct?.name || ""}`,
         `Product category: ${selectedProduct?.category || ""}`,
         `Product description: ${selectedProduct?.description || ""}`,
         `Product price: ${selectedProduct?.price || ""}`,
         `Target platforms: ${POST_PLATFORMS.join(", ")}`,
         `Post theme: ${topic}`,
+        marketingStrategy ? `Proven Instagram strategy from this business's stored analytics: ${marketingStrategy}` : "",
       ].filter(Boolean).join("\n");
       const { captions, imagePrompts } = await askOpenAIJSON(MULTI_PLATFORM_POST_SYSTEM_PROMPT, context);
       const campaignId = crypto.randomUUID();

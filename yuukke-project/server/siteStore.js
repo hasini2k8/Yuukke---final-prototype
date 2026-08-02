@@ -37,6 +37,7 @@ function toSite(row) {
     connections: row.connections ? JSON.parse(row.connections) : {},
     brandGuidelines: row.brand_guidelines ? JSON.parse(row.brand_guidelines) : null,
     characters: row.characters ? JSON.parse(row.characters) : [],
+    websiteContent: row.website_content ? JSON.parse(row.website_content) : {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -59,8 +60,8 @@ export async function saveSite(sellerId, patch) {
   if (!merged.createdAt) merged.createdAt = now;
 
   run(
-    `INSERT INTO sites (seller_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, brand_guidelines, characters, created_at, updated_at)
-     VALUES (@seller_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @brand_guidelines, @characters, @created_at, @updated_at)
+    `INSERT INTO sites (seller_id, business_name, tagline, about, category, accent_color, hero_style, sections, is_tech, logo_prompt, logo_data_url, slug, published, connections, brand_guidelines, characters, website_content, created_at, updated_at)
+     VALUES (@seller_id, @business_name, @tagline, @about, @category, @accent_color, @hero_style, @sections, @is_tech, @logo_prompt, @logo_data_url, @slug, @published, @connections, @brand_guidelines, @characters, @website_content, @created_at, @updated_at)
      ON CONFLICT(seller_id) DO UPDATE SET
        business_name = excluded.business_name, tagline = excluded.tagline, about = excluded.about,
        category = excluded.category, accent_color = excluded.accent_color, hero_style = excluded.hero_style,
@@ -68,7 +69,7 @@ export async function saveSite(sellerId, patch) {
        logo_data_url = excluded.logo_data_url, slug = excluded.slug, published = excluded.published,
        connections = excluded.connections,
        brand_guidelines = excluded.brand_guidelines,
-       characters = excluded.characters, updated_at = excluded.updated_at`,
+       characters = excluded.characters, website_content = excluded.website_content, updated_at = excluded.updated_at`,
     {
       seller_id: sellerId,
       business_name: merged.businessName || null,
@@ -86,6 +87,7 @@ export async function saveSite(sellerId, patch) {
       connections: JSON.stringify(merged.connections || {}),
       brand_guidelines: merged.brandGuidelines ? JSON.stringify(merged.brandGuidelines) : null,
       characters: merged.characters ? JSON.stringify(merged.characters) : null,
+      website_content: JSON.stringify(merged.websiteContent || {}),
       created_at: merged.createdAt,
       updated_at: merged.updatedAt,
     }

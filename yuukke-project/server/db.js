@@ -111,6 +111,43 @@ CREATE TABLE IF NOT EXISTS posts (
   schedule_error TEXT,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS instagram_analytics (
+  seller_id TEXT NOT NULL,
+  post_id TEXT NOT NULL,
+  metric_date TEXT NOT NULL,
+  views INTEGER NOT NULL DEFAULT 0,
+  likes INTEGER NOT NULL DEFAULT 0,
+  comments INTEGER NOT NULL DEFAULT 0,
+  shares INTEGER NOT NULL DEFAULT 0,
+  synced_at TEXT NOT NULL,
+  PRIMARY KEY (seller_id, post_id, metric_date)
+);
+
+CREATE TABLE IF NOT EXISTS marketing_strategies (
+  seller_id TEXT PRIMARY KEY,
+  strategy TEXT NOT NULL,
+  evidence TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS website_analytics (
+  seller_id TEXT NOT NULL,
+  metric_date TEXT NOT NULL,
+  views INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (seller_id, metric_date)
+);
+
+CREATE TABLE IF NOT EXISTS product_posters (
+  id TEXT PRIMARY KEY,
+  seller_id TEXT NOT NULL,
+  product_id TEXT NOT NULL REFERENCES products(id),
+  image_data_url TEXT NOT NULL,
+  prompt TEXT,
+  format TEXT NOT NULL DEFAULT 'square',
+  created_at TEXT NOT NULL
+);
 `);
 
 // Provider credentials live in Postiz; Yuukke stores selected Postiz
@@ -134,6 +171,7 @@ addColumnIfMissing("posts", "scheduled_time", "TEXT");
 addColumnIfMissing("posts", "video_url", "TEXT");
 addColumnIfMissing("posts", "campaign_id", "TEXT");
 addColumnIfMissing("posts", "calendar_number", "INTEGER");
+addColumnIfMissing("sites", "website_content", "TEXT");
 
 db.exec(`
 UPDATE posts

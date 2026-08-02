@@ -10,6 +10,7 @@ import PlatformPostPreview from "../components/PlatformPostPreview";
 import PostThumb from "../components/PostThumb";
 import MicButton from "../components/MicButton";
 import SpeakButton from "../components/SpeakButton";
+import MarketingAnalytics from "../components/MarketingAnalytics";
 import { askOpenAIJSON, askOpenAIChat, generateImage, PLATFORM_SUGGESTION_SYSTEM_PROMPT, MOVE_POST_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite } from "../lib/site";
 import { connectPlatform, fetchConnections } from "../lib/social";
@@ -416,6 +417,8 @@ export default function ContentCalendarPage({ goTo, speechLang }) {
           </button>
         </div>
       </div>
+
+      <MarketingAnalytics />
 
       {previewPost && (
         <div onClick={() => setPreviewPost(null)} style={{

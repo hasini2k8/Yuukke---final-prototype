@@ -33,6 +33,7 @@ export default function WebsiteGeneratorChat({ config, products, onChange, speec
         businessName: config.businessName, tagline: config.tagline, about: config.about,
         accentColor: config.accentColor, heroStyle: config.heroStyle, sections: config.sections,
         category: config.category, isTech: config.isTech, logoPrompt: config.logoPrompt,
+        websiteContent: config.websiteContent,
       };
       const result = await askOpenAIJSON(BUSINESS_SITE_SYSTEM_PROMPT, buildEditContext({ base, current, instruction }));
       onChange(result);
@@ -46,13 +47,14 @@ export default function WebsiteGeneratorChat({ config, products, onChange, speec
 
   return (
     <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 18, marginBottom: 20 }}>
-      <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 800, color: theme.ink, margin: "0 0 10px" }}><Sparkles size={14} color={theme.wine} /> Website design assistant</p>
+      <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 800, color: theme.ink, margin: "0 0 4px" }}><Sparkles size={14} color={theme.wine} /> Website design assistant</p>
+      <p style={{ fontSize: 11.5, color: theme.inkSoft, margin: "0 0 10px" }}>Edit the hero, descriptions, story, FAQs, contact details, policies, calls to action, newsletter and customer chatbot by typing or speaking.</p>
       <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 7, marginBottom: 10 }}>
         {messages.map((message, index) => <p key={index} style={{ alignSelf: message.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%", padding: "8px 10px", borderRadius: 10, margin: 0, fontSize: 12, lineHeight: 1.45, background: message.role === "user" ? theme.wine : theme.cream, color: message.role === "user" ? "#fff" : theme.ink }}>{message.content}</p>)}
         {busy && <span style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: theme.inkSoft }}><Spinner size={11} /> Updating live preview…</span>}
       </div>
       <div style={{ display: "flex", gap: 7 }}>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} disabled={!products.length} placeholder={products.length ? "e.g. make it earthy and focus on the table runner" : "List a product first"} style={{ flex: 1, minWidth: 0, padding: "9px 11px", borderRadius: 9, border: `1.5px solid ${theme.line}`, background: theme.cream, fontFamily: theme.fontBody }} />
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} disabled={!products.length} placeholder={products.length ? "e.g. add FAQs, enable the chatbot and make the hero more premium" : "List a product first"} style={{ flex: 1, minWidth: 0, padding: "9px 11px", borderRadius: 9, border: `1.5px solid ${theme.line}`, background: theme.cream, fontFamily: theme.fontBody }} />
         <MicButton size={34} lang={speechLang} onResult={(text) => setInput((value) => value ? `${value} ${text}` : text)} />
         <button onClick={submit} disabled={!input.trim() || busy || !products.length} aria-label="Update website" style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: theme.wine, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", opacity: !input.trim() || !products.length ? .5 : 1 }}><Send size={13} /></button>
       </div>

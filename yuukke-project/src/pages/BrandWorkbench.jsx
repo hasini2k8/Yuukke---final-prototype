@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Wand2, BookOpen, Smile, Trash2, ArrowRight } from "lucide-react";
+import { ArrowLeft, Wand2, BookOpen, Smile, Trash2, ArrowRight, Image as ImageIcon, Target, MessageCircle, Hash, Lightbulb } from "lucide-react";
 import { theme } from "../theme";
 import DashboardShell from "../components/DashboardShell";
 import { Spinner } from "../components/Shared";
@@ -9,6 +9,8 @@ import TalkAnalyseExecuteBar from "../components/TalkAnalyseExecuteBar";
 import { useTalkAnalyseExecute } from "../hooks/useTalkAnalyseExecute";
 import { generateImage, buildCharacterPrompt, buildEditContext, BRAND_GUIDELINES_SYSTEM_PROMPT } from "../lib/ai";
 import { fetchSite, saveSite } from "../lib/site";
+import { fetchMyProducts } from "../lib/products";
+import { fetchPosters, savePoster, deletePoster } from "../lib/posters";
 import { EN_STRINGS } from "../lib/strings";
 
 export default function BrandWorkbenchPage({ goTo, speechLang }) {
@@ -18,6 +20,10 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
   const [characterPrompt, setCharacterPrompt] = useState("");
   const [characterLoading, setCharacterLoading] = useState(false);
   const [characterError, setCharacterError] = useState("");
+  const [products, setProducts] = useState([]);
+  const [posters, setPosters] = useState([]);
+  const [posterBusy, setPosterBusy] = useState({});
+  const [posterError, setPosterError] = useState("");
   const autoRan = useRef(false);
 
   const guidelinesContext = (instruction) => buildEditContext({
@@ -43,7 +49,34 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
       setGuidelines(s?.brandGuidelines || null);
       setCharacters(s?.characters || []);
     }).catch(() => {});
+    fetchMyProducts().then(setProducts).catch(() => {});
+    fetchPosters().then(setPosters).catch(() => {});
   }, []);
+
+  async function generateProductPoster(product) {
+    setPosterBusy((busy) => ({ ...busy, [product.id]: true }));
+    setPosterError("");
+    try {
+      const palette = (guidelines?.palette || []).map((color) => `${color.name} ${color.hex}`).join(", ");
+      const prompt = `Create a polished square marketing poster for the real product "${product.name}" from ${site?.businessName}. Product description: ${product.description || ""}. Brand palette: ${palette || site?.accentColor}. Brand voice: ${guidelines?.toneOfVoice || "warm and trustworthy"}. Photography direction: ${guidelines?.photographyStyle || "clean product-led composition"}. Keep the supplied product recognizable and accurate. Add an elegant advertising composition with clear visual hierarchy and room for a short headline, but do not generate unreadable text or invent claims.`;
+      const imageDataUrl = await generateImage(prompt, product.imagePreview || "");
+      const saved = await savePoster({ productId: product.id, imageDataUrl, prompt, format: "square" });
+      setPosters((current) => [saved, ...current]);
+    } catch (e) {
+      setPosterError(e.message || `Couldn't generate a poster for ${product.name}.`);
+    } finally {
+      setPosterBusy((busy) => ({ ...busy, [product.id]: false }));
+    }
+  }
+
+  async function generateAllPosters() {
+    for (const product of products) await generateProductPoster(product);
+  }
+
+  async function removePoster(id) {
+    await deletePoster(id);
+    setPosters((current) => current.filter((poster) => poster.id !== id));
+  }
 
   // Talk, analyse, execute — a default set of guidelines appears the moment
   // a business identity exists, with no click required; the talk/type bar
@@ -104,6 +137,7 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
           </button>
         </div>
       ) : (
+        <>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 380px", minWidth: 320 }}>
             <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22, marginBottom: 20 }}>
@@ -179,6 +213,30 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
                       </ul>
                     </div>
                   </div>
+
+                  <div style={{ marginTop: 22, paddingTop: 20, borderTop: `1px solid ${theme.line}`, display: "grid", gap: 14 }}>
+                    <div style={{ padding: 14, borderRadius: 13, background: theme.cream }}>
+                      <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 800, color: theme.wine, margin: "0 0 7px" }}><Target size={14} /> AUDIENCE & POSITIONING</p>
+                      <p style={{ fontSize: 12.5, color: theme.ink, lineHeight: 1.55, margin: "0 0 8px" }}><strong>{guidelines.audience?.primary || "Primary customers"}</strong> — {guidelines.positioning || "A distinct, trustworthy small-business brand."}</p>
+                      <p style={{ fontSize: 11.5, color: theme.inkSoft, margin: 0 }}>Buying triggers: {(guidelines.audience?.buyingTriggers || []).join(" • ")}</p>
+                    </div>
+                    <div style={{ padding: 14, borderRadius: 13, background: theme.cream }}>
+                      <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 800, color: theme.wine, margin: "0 0 8px" }}><MessageCircle size={14} /> KEY MESSAGES & CAPTION FORMULA</p>
+                      <ul style={{ margin: "0 0 9px", paddingLeft: 18, fontSize: 12, color: theme.ink, lineHeight: 1.6 }}>{(guidelines.keyMessages || []).map((message, i) => <li key={i}>{message}</li>)}</ul>
+                      <p style={{ fontSize: 11.5, color: theme.inkSoft, margin: 0 }}><strong>Formula:</strong> {guidelines.captionFormula?.structure}<br /><strong>Example:</strong> {guidelines.captionFormula?.example}</p>
+                    </div>
+                    <div style={{ padding: 14, borderRadius: 13, background: theme.cream }}>
+                      <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 800, color: theme.wine, margin: "0 0 8px" }}><Lightbulb size={14} /> CONTENT PILLARS & CAMPAIGNS</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 10 }}>{(guidelines.contentPillars || []).map((pillar) => <span key={pillar.name} title={pillar.purpose} style={{ padding: "6px 9px", borderRadius: 999, background: theme.white, color: theme.ink, fontSize: 10.5, fontWeight: 700 }}>{pillar.name}</span>)}</div>
+                      {(guidelines.campaignIdeas || []).map((campaign) => <p key={campaign.name} style={{ fontSize: 11.5, color: theme.ink, margin: "5px 0" }}><strong>{campaign.name}:</strong> {campaign.idea} <em>{campaign.callToAction}</em></p>)}
+                    </div>
+                    <div style={{ padding: 14, borderRadius: 13, background: theme.cream }}>
+                      <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 800, color: theme.wine, margin: "0 0 8px" }}><Hash size={14} /> HASHTAG SETS & VISUAL RULES</p>
+                      {(guidelines.hashtagGroups || []).map((group) => <p key={group.name} style={{ fontSize: 11.5, color: theme.ink, lineHeight: 1.5, margin: "5px 0" }}><strong>{group.name}:</strong> {(group.tags || []).join(" ")}</p>)}
+                      <p style={{ fontSize: 11.5, color: theme.inkSoft, margin: "9px 0 4px" }}><strong>Photography:</strong> {guidelines.photographyStyle}</p>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11.5, color: theme.inkSoft, lineHeight: 1.55 }}>{(guidelines.posterRules || []).map((rule, i) => <li key={i}>{rule}</li>)}</ul>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -228,6 +286,27 @@ export default function BrandWorkbenchPage({ goTo, speechLang }) {
             </div>
           </div>
         </div>
+        <section style={{ marginTop: 22, background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 22 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+            <div><p style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 800, color: theme.ink, margin: "0 0 4px" }}><ImageIcon size={17} color={theme.wine} /> AI product poster library</p><p style={{ fontSize: 12, color: theme.inkSoft, margin: 0 }}>Generate on-brand advertising artwork from every real listing image. Posters are saved to the business database for future campaigns.</p></div>
+            <button onClick={generateAllPosters} disabled={!products.length || Object.values(posterBusy).some(Boolean)} style={{ display: "flex", alignItems: "center", gap: 7, background: theme.wine, color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}><Wand2 size={13} /> Generate posters for all products</button>
+          </div>
+          {posterError && <p style={{ color: "#a32d2d", fontSize: 12 }}>{posterError}</p>}
+          {!products.length ? <p style={{ fontSize: 12.5, color: theme.inkSoft }}>Create a product listing first. Its image will then appear here.</p> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 }}>
+            {products.map((product) => {
+              const productPosters = posters.filter((poster) => poster.productId === product.id);
+              const latest = productPosters[0];
+              return <article key={product.id} style={{ border: `1px solid ${theme.line}`, borderRadius: 15, overflow: "hidden", background: theme.cream }}>
+                <div style={{ aspectRatio: "1", background: product.previewColor || theme.creamDark, position: "relative", overflow: "hidden" }}>
+                  {latest || product.imagePreview ? <img src={latest?.imageDataUrl || product.imagePreview} alt={`${product.name} marketing poster`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ height: "100%", display: "grid", placeItems: "center" }}><ImageIcon color={theme.inkSoft} /></div>}
+                  {latest && <button onClick={() => removePoster(latest.id)} aria-label={`Delete ${product.name} poster`} style={{ position: "absolute", top: 8, right: 8, width: 30, height: 30, border: "none", borderRadius: 9, background: "rgba(25,14,18,.65)", color: "#fff", display: "grid", placeItems: "center", cursor: "pointer" }}><Trash2 size={13} /></button>}
+                </div>
+                <div style={{ padding: 13 }}><p style={{ fontSize: 12.5, fontWeight: 800, color: theme.ink, margin: "0 0 3px" }}>{product.name}</p><p style={{ fontSize: 10.5, color: theme.inkSoft, margin: "0 0 10px" }}>{productPosters.length ? `${productPosters.length} saved poster${productPosters.length === 1 ? "" : "s"}` : "No AI poster yet"}</p><button onClick={() => generateProductPoster(product)} disabled={posterBusy[product.id]} style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${theme.line}`, background: theme.white, color: theme.wine, borderRadius: 9, padding: "7px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{posterBusy[product.id] ? <Spinner size={11} /> : <Wand2 size={11} />} {latest ? "Create another version" : "Generate poster"}</button></div>
+              </article>;
+            })}
+          </div>}
+        </section>
+        </>
       )}
     </DashboardShell>
   );

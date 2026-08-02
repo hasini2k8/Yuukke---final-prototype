@@ -25,9 +25,10 @@ const PLATFORM_LABELS = {
 
 const DEFAULT_CONFIG = {
   accentColor: theme.wine, tagline: "Handmade with heart", heroStyle: "warm",
-  sections: ["Hero banner", "Best sellers", "About the maker"],
+  sections: ["Hero banner", "Featured products", "About the business", "Customer chatbot"],
   businessName: "", about: "", category: "", isTech: false, logoPrompt: "", logoDataUrl: "",
   slug: "", published: false,
+  websiteContent: { announcement: "", heroHeadline: "", heroSubheadline: "", primaryCTA: "Shop now", secondaryCTA: "Our story", mission: "", story: "", featuredTitle: "Featured products", trustPoints: [], faqs: [], contact: { email: "", phone: "", whatsapp: "" }, policies: { shipping: "", returns: "", customOrders: "" }, newsletterHeading: "Stay in the loop", newsletterText: "", chatbot: { enabled: true, name: "Shop assistant", welcome: "Hello! How can I help you today?", quickQuestions: ["What do you sell?", "Which products are available?", "How can I order?"] } },
 };
 
 // Only the fields the AI actually owns — config also carries slug/published/
@@ -36,7 +37,7 @@ const DEFAULT_CONFIG = {
 function siteAIFields(c) {
   return {
     businessName: c.businessName, tagline: c.tagline, about: c.about, accentColor: c.accentColor,
-    heroStyle: c.heroStyle, sections: c.sections, category: c.category, isTech: c.isTech, logoPrompt: c.logoPrompt,
+    heroStyle: c.heroStyle, sections: c.sections, category: c.category, isTech: c.isTech, logoPrompt: c.logoPrompt, websiteContent: c.websiteContent,
   };
 }
 
@@ -216,6 +217,10 @@ export default function CustomizeStorePage({ goTo, storeConfig, setStoreConfig, 
     goTo("dashboard");
   }
 
+  function updateWebsiteContent(field, value) {
+    setConfig((current) => ({ ...current, websiteContent: { ...(current.websiteContent || {}), [field]: value } }));
+  }
+
   function jumpTo(id) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -347,6 +352,15 @@ Generated automatically above — Yuukke's AI names your business, writes its st
                 fontSize: 13.5, fontFamily: theme.fontBody, outline: "none", background: theme.cream, resize: "vertical",
               }} />
             </label>
+
+            <details open style={{ marginBottom: 20, border: `1px solid ${theme.line}`, borderRadius: 13, padding: 14, background: theme.cream }}>
+              <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 800, color: theme.ink }}>Website content and built-in chatbot</summary>
+              <p style={{ fontSize: 11, color: theme.inkSoft, lineHeight: 1.5 }}>Edit these manually or tell the website assistant what to change.</p>
+              {[["announcement", "Announcement bar", "e.g. Free delivery this festive week"], ["heroHeadline", "Hero headline", "Main website heading"], ["heroSubheadline", "Hero description", "Short reason customers should explore"], ["primaryCTA", "Main button", "e.g. Shop the collection"], ["mission", "Business mission", "Why this business exists"], ["story", "Our story", "The entrepreneur's story"], ["newsletterHeading", "Newsletter heading", "Stay in the loop"]].map(([field, label, placeholder]) => <label key={field} style={{ display: "block", marginTop: 10 }}><span style={{ display: "block", fontSize: 10.5, fontWeight: 800, color: theme.ink, marginBottom: 5 }}>{label}</span>{field === "story" || field === "heroSubheadline" ? <textarea rows={2} value={config.websiteContent?.[field] || ""} onChange={(e) => updateWebsiteContent(field, e.target.value)} placeholder={placeholder} style={{ width: "100%", padding: "9px 10px", border: `1px solid ${theme.line}`, borderRadius: 9, background: theme.white, fontFamily: theme.fontBody, resize: "vertical" }} /> : <input value={config.websiteContent?.[field] || ""} onChange={(e) => updateWebsiteContent(field, e.target.value)} placeholder={placeholder} style={{ width: "100%", padding: "9px 10px", border: `1px solid ${theme.line}`, borderRadius: 9, background: theme.white, fontFamily: theme.fontBody }} />}</label>)}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(135px,1fr))", gap: 8, marginTop: 10 }}>{[["email", "Contact email"], ["phone", "Phone"], ["whatsapp", "WhatsApp"]].map(([field, label]) => <label key={field}><span style={{ display: "block", fontSize: 10.5, fontWeight: 800, marginBottom: 4 }}>{label}</span><input value={config.websiteContent?.contact?.[field] || ""} onChange={(e) => updateWebsiteContent("contact", { ...(config.websiteContent?.contact || {}), [field]: e.target.value })} style={{ width: "100%", padding: "8px", border: `1px solid ${theme.line}`, borderRadius: 8 }} /></label>)}</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 13, fontSize: 11.5, fontWeight: 800, color: theme.ink }}><input type="checkbox" checked={config.websiteContent?.chatbot?.enabled !== false} onChange={(e) => updateWebsiteContent("chatbot", { ...(config.websiteContent?.chatbot || {}), enabled: e.target.checked })} /> Enable customer chatbot</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8, marginTop: 9 }}><input aria-label="Chatbot name" value={config.websiteContent?.chatbot?.name || ""} onChange={(e) => updateWebsiteContent("chatbot", { ...(config.websiteContent?.chatbot || {}), name: e.target.value })} placeholder="Chatbot name" style={{ padding: 8, border: `1px solid ${theme.line}`, borderRadius: 8 }} /><input aria-label="Chatbot welcome message" value={config.websiteContent?.chatbot?.welcome || ""} onChange={(e) => updateWebsiteContent("chatbot", { ...(config.websiteContent?.chatbot || {}), welcome: e.target.value })} placeholder="Welcome message" style={{ padding: 8, border: `1px solid ${theme.line}`, borderRadius: 8 }} /></div>
+            </details>
 
             <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 20 }}>
               <div style={{

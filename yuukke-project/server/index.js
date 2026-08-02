@@ -13,9 +13,11 @@ import * as wishlist from "./wishlistStore.js";
 import * as orders from "./orderStore.js";
 import * as site from "./siteStore.js";
 import * as posts from "./postStore.js";
+import * as analytics from "./analyticsStore.js";
+import * as posters from "./posterStore.js";
 import { generateOpenAIImage } from "./openaiProxy.js";
 import { askOpenAIText } from "./openaiText.js";
-import { listIntegrations } from "./postizClient.js";
+import { listIntegrations, getPostAnalytics } from "./postizClient.js";
 import { attemptPublish, refreshStatus } from "./socialSchedule.js";
 import { createVideo } from "./veoProxy.js";
 import { get, run } from "./db.js";
@@ -245,6 +247,8 @@ async function handleSite(req, res, url) {
   if (publicMatch && req.method === "GET") {
     const record = await site.getSiteBySlug(publicMatch[1]);
     if (!record) { sendJson(res, 404, { message: "This storefront isn't public yet." }); return true; }
+    analytics.recordWebsiteView(record.sellerId);
+    analytics.refreshStrategy(record.sellerId);
     const storefrontProducts = await listProductsBySeller(record.sellerId);
     sendJson(res, 200, { ...record, products: storefrontProducts });
     return true;
@@ -456,6 +460,43 @@ async function handlePosts(req, res, url) {
   return false;
 }
 
+async function handleAnalytics(req, res, url) {
+  if (!url.pathname.startsWith("/api/analytics")) return false;
+  const sellerId = await requireSeller(req, res);
+  if (!sellerId) return true;
+  if (url.pathname === "/api/analytics" && req.method === "GET") {
+    sendJson(res, 200, analytics.getAnalytics(sellerId));
+    return true;
+  }
+  if (url.pathname === "/api/analytics/sync" && req.method === "POST") {
+    const instagramPosts = (await posts.listPosts(sellerId)).filter((post) => post.platform === "instagram" && post.externalPostId && post.status === "posted");
+    const errors = [];
+    for (const post of instagramPosts) {
+      try { analytics.savePostMetrics(sellerId, post.id, await getPostAnalytics(post.externalPostId, 30)); }
+      catch (e) { errors.push({ postId: post.id, message: e.message }); }
+    }
+    analytics.refreshStrategy(sellerId);
+    sendJson(res, 200, { ...analytics.getAnalytics(sellerId), syncedPosts: instagramPosts.length, errors });
+    return true;
+  }
+  return false;
+}
+
+async function handlePosters(req, res, url) {
+  if (!url.pathname.startsWith("/api/posters")) return false;
+  const sellerId = await requireSeller(req, res);
+  if (!sellerId) return true;
+  if (url.pathname === "/api/posters" && req.method === "GET") { sendJson(res, 200, posters.listPosters(sellerId)); return true; }
+  if (url.pathname === "/api/posters" && req.method === "POST") {
+    try { sendJson(res, 201, posters.createPoster(sellerId, await readJson(req))); }
+    catch (e) { sendJson(res, 400, { message: e.message }); }
+    return true;
+  }
+  const match = url.pathname.match(/^\/api\/posters\/([^/]+)$/);
+  if (match && req.method === "DELETE") { sendJson(res, 200, { ok: posters.deletePoster(sellerId, match[1]) }); return true; }
+  return false;
+}
+
 async function handleOpenAI(req, res, url) {
   if (url.pathname === "/api/openai/image" && req.method === "POST") {
     const { prompt, referenceImageDataUrl } = await readJson(req);
@@ -503,6 +544,8 @@ const server = http.createServer(async (req, res) => {
     if (await handleOrders(req, res, url)) return;
     if (await handleProducts(req, res, url)) return;
     if (await handleSite(req, res, url)) return;
+    if (await handleAnalytics(req, res, url)) return;
+    if (await handlePosters(req, res, url)) return;
     if (await handlePosts(req, res, url)) return;
     if (await handleSocialAuth(req, res, url)) return;
     if (await handleOpenAI(req, res, url)) return;

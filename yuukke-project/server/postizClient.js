@@ -72,3 +72,7 @@ export async function getPostStatus(postId, scheduledFor) {
   const found = (data?.posts || []).find((post) => post.id === postId || post.postId === postId);
   return { found: !!found, posted: !!found?.releaseURL, releaseUrl: found?.releaseURL || null };
 }
+
+export async function getPostAnalytics(postId, days = 30) {
+  return postizFetch(`/analytics/post/${encodeURIComponent(postId)}?date=${days}`);
+}
