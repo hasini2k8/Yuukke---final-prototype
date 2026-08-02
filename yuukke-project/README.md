@@ -2,6 +2,63 @@
 
 A marketplace web app for women entrepreneurs — storefronts, AI-assisted product listings, 3D product previews, and a full marketplace with cart/checkout/orders.
 
+## Business platform walkthrough
+
+The business workspace takes an entrepreneur from registration to product creation, website publishing, marketing and performance learning. These screenshots were captured from the running prototype.
+
+### 1. Seller onboarding
+
+![Yuukke seller onboarding](docs/screenshots/01-seller-onboarding.png)
+
+The five-step onboarding flow collects basic details, the business profile, optional documents, payout information and final review. Voice buttons are available beside supported fields, and drafts are preserved for the signed-in seller.
+
+### 2. Business dashboard
+
+![Yuukke business dashboard](docs/screenshots/02-business-dashboard.png)
+
+The dashboard shows setup progress and provides direct access to product listings, the storefront studio, social calendar and brand workbench. The profile menu contains account information and logout.
+
+### 3. AI product-listing assistant
+
+![Yuukke AI product listing](docs/screenshots/03-ai-product-listing.png)
+
+The seller can type or speak product details and upload the actual product photograph inside the conversation. Yuukke turns the conversation into structured listings, assists with customer-ready descriptions and stores the resulting products under that seller.
+
+### 4. Storefront studio and website assistant
+
+![Yuukke storefront studio](docs/screenshots/04-storefront-studio.png)
+
+The storefront studio combines a live preview with editable colours, hero styles, sections, business identity, calls to action, featured-product headings, mission, story, newsletter content, contact details and shop policies. The separate website-design assistant accepts typed or spoken changes and updates the preview using only the seller's saved products.
+
+A customer-facing chatbot is intentionally not a manual checkbox on this page. The seller asks the website-design assistant to add, configure, disable or remove it; new storefronts start without one.
+
+### 5. Social content calendar and analytics
+
+![Yuukke social calendar](docs/screenshots/05-social-calendar.png)
+
+Approved drafts receive clear calendar labels and can use either a seller-selected date or an AI-selected slot. The scheduling assistant understands requests to move a named post to another date or time. Calendar records, Postiz delivery status, Instagram performance and storefront views are stored for later marketing recommendations.
+
+### 6. Brand workbench
+
+![Yuukke brand workbench](docs/screenshots/06-brand-workbench.png)
+
+The brand workbench builds reusable guidelines from the storefront identity: colours, voice, content pillars, caption guidance and product-specific poster assets. Saved brand information becomes context for later AI marketing work.
+
+### 7. Accessibility controls
+
+![Yuukke accessibility controls](docs/screenshots/07-accessibility-controls.png)
+
+Accessibility tools remain available throughout the business workspace. They include adjustable text sizing, high-contrast mode, voice input, read-aloud controls and the Google Translate language widget.
+
+## Business workflow
+
+1. Create a secure account and complete seller onboarding.
+2. Describe products by typing or speaking and upload their real images.
+3. Review the generated listings and save them to the catalogue.
+4. Generate a storefront from those listings and refine it through the website assistant.
+5. Publish the storefront, create editable social drafts and schedule approved content through Postiz.
+6. Use social and website analytics to improve future marketing suggestions.
+
 ## Technology stack
 
 ### Frontend

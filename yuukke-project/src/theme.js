@@ -6,4 +6,6 @@ export const theme = {
 };
 
 export const ACCENTS = ["#7d1935", "#a3512c", "#2c6e49", "#1f5c7a", "#6a4c93", "#8a7d3f"];
-export const ALL_SECTIONS = ["Hero banner", "Featured products", "Categories", "About the business", "Our story", "Why choose us", "FAQ", "Contact", "Instagram feed", "Newsletter signup", "Customer chatbot"];
+// Customer chatbot is deliberately excluded from the manual section picker.
+// Sellers add or remove it by asking the website design assistant.
+export const ALL_SECTIONS = ["Hero banner", "Featured products", "Categories", "About the business", "Our story", "Why choose us", "FAQ", "Contact", "Instagram feed", "Newsletter signup"];

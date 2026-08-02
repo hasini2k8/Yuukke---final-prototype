@@ -48,7 +48,7 @@ export default function WebsiteGeneratorChat({ config, products, onChange, speec
   return (
     <div style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 18, padding: 18, marginBottom: 20 }}>
       <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 800, color: theme.ink, margin: "0 0 4px" }}><Sparkles size={14} color={theme.wine} /> Website design assistant</p>
-      <p style={{ fontSize: 11.5, color: theme.inkSoft, margin: "0 0 10px" }}>Edit the hero, descriptions, story, FAQs, contact details, policies, calls to action, newsletter and customer chatbot by typing or speaking.</p>
+      <p style={{ fontSize: 11.5, color: theme.inkSoft, margin: "0 0 10px" }}>Edit the hero, descriptions, sections, story, FAQs, contact details, policies, calls to action and newsletter by typing or speaking. Ask here if you want the AI to add, configure or remove a customer chatbot.</p>
       <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 7, marginBottom: 10 }}>
         {messages.map((message, index) => <p key={index} style={{ alignSelf: message.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%", padding: "8px 10px", borderRadius: 10, margin: 0, fontSize: 12, lineHeight: 1.45, background: message.role === "user" ? theme.wine : theme.cream, color: message.role === "user" ? "#fff" : theme.ink }}>{message.content}</p>)}
         {busy && <span style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: theme.inkSoft }}><Spinner size={11} /> Updating live preview…</span>}

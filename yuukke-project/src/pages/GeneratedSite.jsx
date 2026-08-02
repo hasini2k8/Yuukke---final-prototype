@@ -123,6 +123,8 @@ export default function GeneratedSitePage() {
 
       {sections.includes("FAQ") && content.faqs?.length > 0 && <section style={{ maxWidth: 760, margin: "0 auto", padding: "5px 24px 50px" }}><h2 style={{ fontFamily: theme.fontDisplay, color: theme.ink, textAlign: "center" }}>Frequently asked questions</h2>{content.faqs.map((faq) => <details key={faq.question} style={{ background: theme.white, border: `1px solid ${theme.line}`, borderRadius: 12, padding: "13px 15px", marginTop: 9 }}><summary style={{ fontWeight: 800, color: theme.ink, cursor: "pointer", fontSize: 13 }}>{faq.question}</summary><p style={{ color: theme.inkSoft, fontSize: 12.5, lineHeight: 1.6 }}>{faq.answer}</p></details>)}</section>}
 
+      {Object.values(content.policies || {}).some(Boolean) && <section style={{ maxWidth: 980, margin: "0 auto 45px", padding: "0 24px" }}><h2 style={{ fontFamily: theme.fontDisplay, color: theme.ink, textAlign: "center" }}>Shopping information</h2><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>{[["shipping", "Shipping"], ["returns", "Returns"], ["customOrders", "Custom orders"]].filter(([key]) => content.policies?.[key]).map(([key, label]) => <div key={key} style={{ padding: 18, background: theme.white, borderRadius: 14, border: `1px solid ${theme.line}` }}><h3 style={{ margin: "0 0 7px", color: theme.ink, fontSize: 13 }}>{label}</h3><p style={{ margin: 0, color: theme.inkSoft, fontSize: 12.5, lineHeight: 1.6 }}>{content.policies[key]}</p></div>)}</div></section>}
+
       {sections.includes("Contact") && (content.contact?.email || content.contact?.phone || content.contact?.whatsapp) && <section style={{ textAlign: "center", padding: "35px 24px", background: theme.wineTint }}><h2 style={{ fontFamily: theme.fontDisplay, color: theme.ink }}>Contact the business</h2><p style={{ color: theme.inkSoft, fontSize: 13 }}>{[content.contact.email, content.contact.phone, content.contact.whatsapp && `WhatsApp: ${content.contact.whatsapp}`].filter(Boolean).join(" · ")}</p></section>}
 
       {sections.includes("Newsletter signup") && <section style={{ textAlign: "center", padding: "40px 24px", background: site.accentColor || theme.wine, color: "#fff" }}><h2 style={{ margin: "0 0 7px", fontFamily: theme.fontDisplay }}>{content.newsletterHeading || "Stay in the loop"}</h2><p style={{ opacity: .85, fontSize: 12.5 }}>{content.newsletterText || "Hear about new products and business updates."}</p><div style={{ display: "flex", justifyContent: "center", gap: 7 }}><input aria-label="Email for updates" placeholder="Your email address" style={{ padding: "10px 12px", borderRadius: 9, border: 0, width: 240 }} /><button style={{ border: 0, borderRadius: 9, padding: "10px 14px", fontWeight: 800, color: site.accentColor || theme.wine }}>Subscribe</button></div></section>}
@@ -145,7 +147,7 @@ export default function GeneratedSitePage() {
           </div>
         </div>
       )}
-      {sections.includes("Customer chatbot") && <StorefrontChatbot site={site} products={products} />}
+      {sections.includes("Customer chatbot") && content.chatbot?.enabled && <StorefrontChatbot site={site} products={products} />}
     </div>
   );
 }
